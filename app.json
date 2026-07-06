@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "SnagVision",
+    "slug": "snagvision",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "plugins": [
+      "expo-sqlite"
+    ]
+  }
+}

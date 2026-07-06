@@ -1,0 +1,64 @@
+import * as SQLite from 'expo-sqlite';
+
+let db;
+
+export async function initDb() {
+    db = await SQLite.openDatabaseAsync('siteiq.db');
+    await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS photos (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      roomId TEXT NOT NULL,
+      spotId TEXT NOT NULL,
+      localUri TEXT NOT NULL,
+      checksum TEXT,
+      capturedAt INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      lastError TEXT,
+      remoteId TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_photos_status ON photos(status);
+    CREATE INDEX IF NOT EXISTS idx_photos_spot ON photos(spotId);
+  `);
+    return db;
+}
+
+export async function insertPhoto({ id, projectId, roomId, spotId, localUri, checksum }) {
+    await db.runAsync(
+        `INSERT INTO photos (id, projectId, roomId, spotId, localUri, checksum, capturedAt, status, attempts)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0)`,
+        [id, projectId, roomId, spotId, localUri, checksum, Date.now()]
+    );
+}
+
+export async function getPhotosForSpot(spotId) {
+    return db.getAllAsync(`SELECT * FROM photos WHERE spotId = ? ORDER BY capturedAt`, [spotId]);
+}
+
+export async function getPendingPhotos() {
+    return db.getAllAsync(
+        `SELECT * FROM photos WHERE status IN ('pending', 'failed') ORDER BY capturedAt`
+    );
+}
+
+export async function markUploading(id) {
+    await db.runAsync(`UPDATE photos SET status = 'uploading' WHERE id = ?`, [id]);
+}
+
+export async function markDone(id, remoteId) {
+    await db.runAsync(`UPDATE photos SET status = 'done', remoteId = ? WHERE id = ?`, [remoteId, id]);
+}
+
+export async function markFailed(id, errorMsg) {
+    await db.runAsync(
+        `UPDATE photos SET status = 'failed', attempts = attempts + 1, lastError = ? WHERE id = ?`,
+        [errorMsg, id]
+    );
+}
+
+export async function getUploadSummary() {
+    return db.getAllAsync(
+        `SELECT status, COUNT(*) as count FROM photos GROUP BY status`
+    );
+}
