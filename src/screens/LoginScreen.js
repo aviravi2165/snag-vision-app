@@ -10,7 +10,7 @@ export default function LoginScreen({ navigation }) {
 
   const login = async () => {
     try {
-      navigation.replace('Projects');
+      navigation.replace('Main');
       const r = await api.post('/auth/login', { email, password });
       await AsyncStorage.setItem('sv_token', r.data.token);
     } catch {
