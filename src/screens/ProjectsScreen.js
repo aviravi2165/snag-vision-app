@@ -5,6 +5,8 @@ import api from '../api/client';
 import SyncStatusBar from '../components/SyncStatusBar';
 import { cacheGet, cacheSet } from '../data/cache';
 
+
+
 const MOCK_PROJECTS = [
   { ProjectId: 'proj-1', Name: 'Courtyard by Marriott — Bharuch', Folder: 'IEVO', City: 'Bharuch', FloorCount: 1 },
   { ProjectId: 'proj-2', Name: 'WhyJack', Folder: 'IEVO', City: 'Pune', FloorCount: 2 },
@@ -13,11 +15,6 @@ const MOCK_PROJECTS = [
 export default function ProjectsScreen({ navigation }) {
   const [projects, setProjects] = useState(MOCK_PROJECTS ?? []);
 
-  // useEffect(() => {
-  //   api.get('/projects')
-  //     .then((r) => setProjects(MOCK_PROJECTS ?? r.data))
-  //     .catch(() => setProjects(MOCK_PROJECTS)); // no backend yet — use dummy project
-  // }, []);
   useEffect(() => {
     api.get('/projects')
       .then(async (r) => { setProjects(r.data); await cacheSet('cache:projects', r.data); })
@@ -33,6 +30,7 @@ export default function ProjectsScreen({ navigation }) {
     <>
       <SyncStatusBar />
       <View style={styles.c}>
+      
         <Text style={styles.h}>Select Project</Text>
         <FlatList
           data={projects}
