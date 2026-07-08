@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Modal, FlatList } from 'react-native';
 import uuid from 'react-native-uuid';
 import api from '../api/client';
 import * as osc from '../camera/oscClient';
-import { insertPhoto, getPhotosForSpot } from '../db/localStore';
+import { insertPhoto, getPhotosForSpot, getPhotoCountsBySpot } from '../db/localStore';
 import { savePhotoLocally } from '../storage/fileStore';
 import PlanPicker from '../components/PlanPicker';
 import { MOCK_STRUCTURE } from '../data/mockStructure';
@@ -11,39 +11,27 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { cacheGet, cacheSet } from '../data/cache';
 import { ensureLocalPlanImage } from '../data/planCache';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function CaptureScreen({ route }) {
-  const { projectId } = route.params;
+  const [projectId, setProjectId] = useState(route?.params?.projectId ?? null);
+  const [projectName, setProjectName] = useState(route?.params?.projectName ?? '');
   const [floors, setFloors] = useState([]);
   const [floorIdx, setFloorIdx] = useState(0);
+  const [floorPickerOpen, setFloorPickerOpen] = useState(false);
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [currentSpot, setCurrentSpot] = useState(null);
   const [spotCount, setSpotCount] = useState(0);
-  const [addMode, setAddMode] = useState(false);
+  const [spotCounts, setSpotCounts] = useState({});
   const [status, setStatus] = useState('Not connected to camera');
 
-
-
-  // const handlePhoneCapture = async (dataUrl) => {
-  //   if (!currentSpot) return;
-  //   const photoId = uuid.v4();
-  //   const { localUri, checksum } = await savePhotoLocally(dataUrl, photoId);
-  //   await insertPhoto({ id: photoId, projectId, roomId: currentSpot.RoomId, spotId: currentSpot.SpotId, localUri, checksum });
-  //   setSpotCount((c) => c + 1);
-  //   setStatus('Saved to local queue');
-  // };
-
-  // NOTE: this must run BEFORE joining the camera's WiFi — once the phone
-  // joins the camera's AP it has no internet, so the floor/room/spot
-  // structure has to already be cached locally by this point.
-  // useEffect(() => {
-  //   api.get(`/projects/${projectId}/structure`).then((r) => setFloors(r.data)).catch(() => { });
-  // }, []);
+  const refreshSpotCounts = async () => setSpotCounts(await getPhotoCountsBySpot());
+  useEffect(() => { refreshSpotCounts(); }, []);
 
   const captureWithPhoneCamera = async () => {
-    // if (!currentSpot) return;
+    if (!currentSpot) return;
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) { Alert.alert('Camera permission needed'); return; }
 
@@ -58,12 +46,13 @@ export default function CaptureScreen({ route }) {
       await insertPhoto({
         id: photoId,
         projectId,
-        roomId:  'jksdn' ?? currentSpot.RoomId,
-        spotId: 'kjsndv' ?? currentSpot.SpotId,
+        roomId: currentSpot.RoomId,
+        spotId: currentSpot.SpotId,
         localUri,
         checksum,
       });
       setSpotCount((c) => c + 1);
+      await refreshSpotCounts();
       setStatus('Saved to local queue');
     } catch (e) {
       setStatus(`Save failed: ${e.message}`);
@@ -72,13 +61,23 @@ export default function CaptureScreen({ route }) {
     setCapturing(false);
   };
 
-  // useEffect(() => {
-  //   api.get(`/projects/${projectId}/structure`)
-  //     .then((r) => setFloors(MOCK_STRUCTURE ?? r.data))
-  //     .catch(() => setFloors(MOCK_STRUCTURE));
-  // }, []);
+  // When opened directly from the drawer there are no route params — fall back
+  // to the project the worker last selected on the Projects screen.
+  useEffect(() => {
+    if (projectId) return;
+    AsyncStorage.getItem('sv_project').then((id) => id && setProjectId(id));
+  }, [projectId]);
 
   useEffect(() => {
+    if (projectName || !projectId) return;
+    cacheGet('cache:projects').then((cached) => {
+      const match = (cached || []).find((p) => p.ProjectId === projectId);
+      if (match) setProjectName(match.Name);
+    });
+  }, [projectId, projectName]);
+
+  useEffect(() => {
+    if (!projectId) return;
     const load = async (rawFloors) => {
       const localized = await Promise.all(rawFloors.map(ensureLocalPlanImage));
       setFloors(localized);
@@ -90,7 +89,7 @@ export default function CaptureScreen({ route }) {
         const cached = await cacheGet(`cache:structure:${projectId}`);
         load(cached || MOCK_STRUCTURE);
       });
-  }, []);
+  }, [projectId]);
 
   const floor = floors[floorIdx];
 
@@ -115,17 +114,6 @@ export default function CaptureScreen({ route }) {
     setSpotCount(rows.length);
   };
 
-  const addSpotAt = async (x, y) => {
-    if (!floor?.rooms?.length) { Alert.alert('Add a room first in Master Setup'); return; }
-    const room = floor.rooms[0];
-    const name = `Spot ${(room.spots?.length || 0) + 1}`;
-    const r = await api.post(`/rooms/${room.RoomId}/spots`, { spotName: name, coordinateX: x, coordinateY: y });
-    const fresh = await api.get(`/projects/${projectId}/structure`);
-    setFloors(fresh.data);
-    setAddMode(false);
-    selectSpot(r.data);
-  };
-
   const capturePhoto = async () => {
     if (!currentSpot) return;
     setCapturing(true);
@@ -148,6 +136,7 @@ export default function CaptureScreen({ route }) {
       });
 
       setSpotCount((c) => c + 1);
+      await refreshSpotCounts();
       setStatus('Saved to device — will upload when you sync');
     } catch (e) {
       setStatus(`Capture failed: ${e.message}`);
@@ -158,35 +147,43 @@ export default function CaptureScreen({ route }) {
 
   return (
     <ScrollView style={styles.c}>
-      <Text style={styles.h}>Spot Capture</Text>
 
-      {floors.length > 1 && (
-        <View style={styles.floorRow}>
-          {floors.map((f, i) => (
-            <TouchableOpacity key={f.FloorId} onPress={() => setFloorIdx(i)}
-              style={[styles.chip, i === floorIdx && styles.chipActive]}>
-              <Text style={styles.chipT}>{f.FloorName}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+      <Text style={styles.h}>{projectName || 'Spot Capture'}</Text>
+
+      {floors.length > 0 && (
+        <TouchableOpacity style={styles.floorSelect} onPress={() => setFloorPickerOpen(true)} disabled={floors.length < 2}>
+          <Text style={styles.floorSelectLabel}>Floor</Text>
+          <Text style={styles.floorSelectValue}>{floor?.FloorName}{floors.length > 1 ? '  ▾' : ''}</Text>
+        </TouchableOpacity>
       )}
 
-      {/* <PhoneCameraCapture ref={cameraRef} onCapture={handlePhoneCapture} />  */}
+      <Modal visible={floorPickerOpen} transparent animationType="fade" onRequestClose={() => setFloorPickerOpen(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setFloorPickerOpen(false)}>
+          <View style={styles.modalCard}>
+            <FlatList
+              data={floors}
+              keyExtractor={(f) => f.FloorId}
+              renderItem={({ item, index }) => (
+                <TouchableOpacity
+                  style={[styles.modalRow, index === floorIdx && styles.modalRowActive]}
+                  onPress={() => { setFloorIdx(index); setFloorPickerOpen(false); }}
+                >
+                  <Text style={styles.modalRowT}>{item.FloorName}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <View style={styles.card}>
-        <View style={styles.planHead}>
-          <Text style={styles.planTitle}>Tap your spot on the plan</Text>
-          <TouchableOpacity onPress={() => setAddMode((v) => !v)} style={[styles.smallBtn, addMode && styles.smallBtnOn]}>
-            <Text style={styles.smallBtnT}>{addMode ? 'Cancel' : '+ New Spot'}</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.planTitle}>Tap your spot on the plan</Text>
         <PlanPicker
           planUrl={floor?.FloorPlanImageUrl}
           rooms={floor?.rooms || []}
           activeSpotId={currentSpot?.SpotId}
-          addMode={addMode}
+          counts={spotCounts}
           onSelectSpot={selectSpot}
-          onAddPoint={addSpotAt}
         />
         <Text style={styles.current}>
           Current spot: <Text style={{ color: '#4fae5e' }}>{currentSpot?.SpotName || 'none selected'}</Text>
@@ -217,7 +214,7 @@ export default function CaptureScreen({ route }) {
 
       <TouchableOpacity
         style={[styles.btn, { backgroundColor: '#2a2e37' }, (!currentSpot || capturing) && { opacity: 0.5 }]}
-        // disabled={!currentSpot || capturing}
+        disabled={!currentSpot || capturing}
         onPress={captureWithPhoneCamera}
       >
         <Text style={styles.btnText}>{currentSpot ? 'Use Mobile Camera (test)' : 'Select a spot first'}</Text>
@@ -233,16 +230,16 @@ export default function CaptureScreen({ route }) {
 const styles = StyleSheet.create({
   c: { flex: 1, backgroundColor: '#0e0f12', padding: 16 },
   h: { color: '#fff', fontSize: 22, fontWeight: '700', marginBottom: 12 },
-  floorRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#16181d', borderRadius: 16, marginRight: 8, marginBottom: 8, borderWidth: 1, borderColor: '#2a2e37' },
-  chipActive: { backgroundColor: '#D92906', borderColor: '#D92906' },
-  chipT: { color: '#e8eaed', fontSize: 12 },
+  floorSelect: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#16181d', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#2a2e37', marginBottom: 16 },
+  floorSelectLabel: { color: '#9aa0aa', fontSize: 12 },
+  floorSelectValue: { color: '#fff', fontWeight: '700' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.5)', justifyContent: 'center', padding: 24 },
+  modalCard: { backgroundColor: '#16181d', borderRadius: 10, borderWidth: 1, borderColor: '#2a2e37', maxHeight: 320, overflow: 'hidden' },
+  modalRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#2a2e37' },
+  modalRowActive: { backgroundColor: '#2a2e37' },
+  modalRowT: { color: '#fff', fontWeight: '600' },
   card: { backgroundColor: '#16181d', borderRadius: 10, padding: 16, borderWidth: 1, borderColor: '#2a2e37', marginBottom: 16 },
-  planHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  planTitle: { color: '#fff', fontWeight: '700' },
-  smallBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#D92906' },
-  smallBtnOn: { backgroundColor: '#D92906' },
-  smallBtnT: { color: '#fff', fontSize: 12 },
+  planTitle: { color: '#fff', fontWeight: '700', marginBottom: 10 },
   current: { color: '#9aa0aa', marginTop: 10 },
   row: { color: '#e8eaed', marginBottom: 6 },
   btn: { backgroundColor: '#D92906', padding: 16, borderRadius: 10, marginBottom: 12 },
