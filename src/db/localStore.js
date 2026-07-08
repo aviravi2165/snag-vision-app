@@ -2,6 +2,18 @@ import * as SQLite from 'expo-sqlite';
 
 let db;
 
+// expo-sqlite on Android throws a native NullPointerException
+// ("NativeDatabase.prepareAsync ... rejected") when two statements are
+// prepared on the same connection at once. Screens (Dashboard, SyncStatusBar,
+// Capture) all query this db independently, so funnel every call through one
+// chain to guarantee they never overlap.
+let queue = Promise.resolve();
+function serialized(fn) {
+    const result = queue.then(fn);
+    queue = result.catch(() => {});
+    return result;
+}
+
 export async function initDb() {
     db = await SQLite.openDatabaseAsync('siteiq.db');
     await db.execAsync(`
@@ -25,40 +37,47 @@ export async function initDb() {
 }
 
 export async function insertPhoto({ id, projectId, roomId, spotId, localUri, checksum }) {
-    await db.runAsync(
+    await serialized(() => db.runAsync(
         `INSERT INTO photos (id, projectId, roomId, spotId, localUri, checksum, capturedAt, status, attempts)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0)`,
         [id, projectId, roomId, spotId, localUri, checksum, Date.now()]
-    );
+    ));
 }
 
 export async function getPhotosForSpot(spotId) {
-    return db.getAllAsync(`SELECT * FROM photos WHERE spotId = ? ORDER BY capturedAt`, [spotId]);
+    return serialized(() => db.getAllAsync(`SELECT * FROM photos WHERE spotId = ? ORDER BY capturedAt`, [spotId]));
 }
 
 export async function getPendingPhotos() {
-    return db.getAllAsync(
+    return serialized(() => db.getAllAsync(
         `SELECT * FROM photos WHERE status IN ('pending', 'failed') ORDER BY capturedAt`
-    );
+    ));
 }
 
 export async function markUploading(id) {
-    await db.runAsync(`UPDATE photos SET status = 'uploading' WHERE id = ?`, [id]);
+    await serialized(() => db.runAsync(`UPDATE photos SET status = 'uploading' WHERE id = ?`, [id]));
 }
 
 export async function markDone(id, remoteId) {
-    await db.runAsync(`UPDATE photos SET status = 'done', remoteId = ? WHERE id = ?`, [remoteId, id]);
+    await serialized(() => db.runAsync(`UPDATE photos SET status = 'done', remoteId = ? WHERE id = ?`, [remoteId, id]));
 }
 
 export async function markFailed(id, errorMsg) {
-    await db.runAsync(
+    await serialized(() => db.runAsync(
         `UPDATE photos SET status = 'failed', attempts = attempts + 1, lastError = ? WHERE id = ?`,
         [errorMsg, id]
-    );
+    ));
 }
 
 export async function getUploadSummary() {
-    return db.getAllAsync(
+    return serialized(() => db.getAllAsync(
         `SELECT status, COUNT(*) as count FROM photos GROUP BY status`
-    );
+    ));
+}
+
+export async function getPhotoCountsBySpot() {
+  const rows = await serialized(() => db.getAllAsync(`SELECT spotId, COUNT(*) as count FROM photos GROUP BY spotId`));
+  const map = {};
+  rows.forEach((r) => { map[r.spotId] = r.count; });
+  return map;
 }
