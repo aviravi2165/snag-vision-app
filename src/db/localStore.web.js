@@ -18,9 +18,9 @@ export async function getPhotosForSpot(spotId) {
   return all.filter((p) => p.spotId === spotId);
 }
 
-export async function getPendingPhotos() {
+export async function getPendingPhotos(projectId) {
   const all = await allPhotos();
-  return all.filter((p) => p.status === 'pending' || p.status === 'failed');
+  return all.filter((p) => (p.status === 'pending' || p.status === 'failed') && (!projectId || p.projectId === projectId));
 }
 
 export async function markUploading(id) {
@@ -46,5 +46,34 @@ export async function getPhotoCountsBySpot() {
   const all = await allPhotos();
   const map = {};
   all.forEach((p) => { map[p.spotId] = (map[p.spotId] || 0) + 1; });
+  return map;
+}
+
+export async function getPhotosForProject(projectId) {
+  const all = (await allPhotos()).filter((p) => p.projectId === projectId);
+  return all.sort((a, b) => (b.capturedAt || 0) - (a.capturedAt || 0));
+}
+
+export async function getSyncSummaryByProject() {
+  const all = await allPhotos();
+  const map = {};
+  all.forEach((p) => {
+    if (!map[p.projectId]) map[p.projectId] = { pending: 0, uploading: 0, done: 0, failed: 0 };
+    map[p.projectId][p.status] = (map[p.projectId][p.status] || 0) + 1;
+  });
+  return map;
+}
+
+export async function getProjectSyncSummary(projectId) {
+  const all = (await allPhotos()).filter((p) => p.projectId === projectId);
+  const summary = { pending: 0, uploading: 0, done: 0, failed: 0 };
+  all.forEach((p) => { summary[p.status] = (summary[p.status] || 0) + 1; });
+  return summary;
+}
+
+export async function getLastActivityByProject() {
+  const all = await allPhotos();
+  const map = {};
+  all.forEach((p) => { map[p.projectId] = Math.max(map[p.projectId] || 0, p.capturedAt || 0); });
   return map;
 }

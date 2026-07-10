@@ -13,7 +13,7 @@ export function onSyncProgress(cb) {
 }
 function notify(event) { listeners.forEach((l) => l(event)); }
 
-export const MOCK_UPLOAD = true;
+export const MOCK_UPLOAD = false;
 
 async function uploadOne(photo) {
      if (MOCK_UPLOAD) {
@@ -41,22 +41,25 @@ async function uploadOne(photo) {
     return JSON.parse(result.body || '{}');
 }
 
-export async function runSync() {
+// projectId is optional — omit it to drain the whole cross-project queue
+// (used by the global auto-sync-on-reconnect watcher), or pass one so a
+// worker can choose which project's photos go up first.
+export async function runSync(projectId) {
     if (isSyncing) return { alreadyRunning: true };
     const net = await NetInfo.fetch();
-    if (!net.isConnected) { notify({ type: 'offline' }); return { offline: true }; }
+    if (!net.isConnected) { notify({ type: 'offline', projectId }); return { offline: true }; }
 
     isSyncing = true;
-    const pending = await getPendingPhotos();
-    notify({ type: 'start', total: pending.length });
+    const pending = await getPendingPhotos(projectId);
+    notify({ type: 'start', total: pending.length, projectId });
 
     let done = 0, failed = 0;
     for (const photo of pending) {
         const still = await NetInfo.fetch();
-        if (!still.isConnected) { notify({ type: 'offline-mid-sync' }); break; }
+        if (!still.isConnected) { notify({ type: 'offline-mid-sync', projectId }); break; }
 
         await markUploading(photo.id);
-        notify({ type: 'progress', done, failed, total: pending.length });
+        notify({ type: 'progress', done, failed, total: pending.length, projectId });
         try {
             const result = await uploadOne(photo);
             await markDone(photo.id, result.id || 'ok');
@@ -68,7 +71,7 @@ export async function runSync() {
     }
 
     isSyncing = false;
-    notify({ type: 'complete', done, failed, total: pending.length });
+    notify({ type: 'complete', done, failed, total: pending.length, projectId });
     return { done, failed, total: pending.length };
 }
 

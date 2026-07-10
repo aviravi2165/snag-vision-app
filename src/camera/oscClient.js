@@ -13,10 +13,16 @@ async function post(path, body) {
     return res.json();
 }
 
-export async function pingCamera() {
-    const res = await fetch(`${CAMERA_BASE}/osc/info`);
-    if (!res.ok) throw new Error('Camera not reachable');
-    return res.json();
+export async function pingCamera(timeoutMs = 8000) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(`${CAMERA_BASE}/osc/info`, { signal: controller.signal });
+        if (!res.ok) throw new Error('Camera not reachable');
+        return await res.json();
+    } finally {
+        clearTimeout(t);
+    }
 }
 
 // Must run once after connecting — takePicture errors out otherwise.
