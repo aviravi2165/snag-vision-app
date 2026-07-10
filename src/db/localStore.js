@@ -48,7 +48,13 @@ export async function getPhotosForSpot(spotId) {
     return serialized(() => db.getAllAsync(`SELECT * FROM photos WHERE spotId = ? ORDER BY capturedAt`, [spotId]));
 }
 
-export async function getPendingPhotos() {
+export async function getPendingPhotos(projectId) {
+    if (projectId) {
+        return serialized(() => db.getAllAsync(
+            `SELECT * FROM photos WHERE status IN ('pending', 'failed') AND projectId = ? ORDER BY capturedAt`,
+            [projectId]
+        ));
+    }
     return serialized(() => db.getAllAsync(
         `SELECT * FROM photos WHERE status IN ('pending', 'failed') ORDER BY capturedAt`
     ));
@@ -80,4 +86,46 @@ export async function getPhotoCountsBySpot() {
   const map = {};
   rows.forEach((r) => { map[r.spotId] = r.count; });
   return map;
+}
+
+export async function getPhotosForProject(projectId) {
+    return serialized(() => db.getAllAsync(
+        `SELECT * FROM photos WHERE projectId = ? ORDER BY capturedAt DESC`,
+        [projectId]
+    ));
+}
+
+// One grouped query instead of one getProjectSyncSummary() call per project —
+// used by the Dashboard, which needs every project's breakdown at once.
+export async function getSyncSummaryByProject() {
+    const rows = await serialized(() => db.getAllAsync(
+        `SELECT projectId, status, COUNT(*) as count FROM photos GROUP BY projectId, status`
+    ));
+    const map = {};
+    rows.forEach((r) => {
+        if (!map[r.projectId]) map[r.projectId] = { pending: 0, uploading: 0, done: 0, failed: 0 };
+        map[r.projectId][r.status] = r.count;
+    });
+    return map;
+}
+
+export async function getProjectSyncSummary(projectId) {
+    const rows = await serialized(() => db.getAllAsync(
+        `SELECT status, COUNT(*) as count FROM photos WHERE projectId = ? GROUP BY status`,
+        [projectId]
+    ));
+    const summary = { pending: 0, uploading: 0, done: 0, failed: 0 };
+    rows.forEach((r) => { summary[r.status] = r.count; });
+    return summary;
+}
+
+// Drives "sort by latest updated" on the Projects screen — a project a worker
+// captured photos for five minutes ago should sort above one untouched for days.
+export async function getLastActivityByProject() {
+    const rows = await serialized(() => db.getAllAsync(
+        `SELECT projectId, MAX(capturedAt) as last FROM photos GROUP BY projectId`
+    ));
+    const map = {};
+    rows.forEach((r) => { map[r.projectId] = r.last; });
+    return map;
 }

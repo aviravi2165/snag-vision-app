@@ -78,17 +78,21 @@ export default function CaptureScreen({ route }) {
 
   useEffect(() => {
     if (!projectId) return;
+    const hasSpots = (rawFloors) => (rawFloors || []).some((f) => (f.rooms || []).some((r) => (r.spots || []).length > 0));
     const load = async (rawFloors) => {
       const localized = await Promise.all(rawFloors.map(ensureLocalPlanImage));
       setFloors(localized);
       await cacheSet(`cache:structure:${projectId}`, localized);
     };
+    const useCacheOrMock = async () => {
+      const cached = await cacheGet(`cache:structure:${projectId}`);
+      load(hasSpots(cached) ? cached : MOCK_STRUCTURE);
+    };
     api.get(`/projects/${projectId}/structure`)
-      .then((r) => load(r.data))
-      .catch(async () => {
-        const cached = await cacheGet(`cache:structure:${projectId}`);
-        load(cached || MOCK_STRUCTURE);
-      });
+      // A live response with no spots is as useless as no response — fall
+      // back rather than leaving the plan viewer with nothing to click.
+      .then((r) => (hasSpots(r.data) ? load(r.data) : useCacheOrMock()))
+      .catch(useCacheOrMock);
   }, [projectId]);
 
   const floor = floors[floorIdx];
