@@ -8,17 +8,12 @@ import { ensureLocalPlanImage } from '../data/planCache';
 import { getProjectSyncSummary, getLastActivityByProject, getPhotoCountsBySpot } from '../db/localStore';
 import { runSync, onSyncProgress } from '../sync/syncEngine';
 
-const MOCK_PROJECTS = [
-  { ProjectId: 'proj-1', Name: 'Courtyard by Marriott — Bharuch', Folder: 'IEVO', City: 'Bharuch', FloorCount: 1 },
-  { ProjectId: 'proj-2', Name: 'WhyJack', Folder: 'IEVO', City: 'Pune', FloorCount: 2 },
-];
-
 function sortByActivity(list, lastMap) {
   return [...list].sort((a, b) => (lastMap[b.ProjectId] || 0) - (lastMap[a.ProjectId] || 0));
 }
 
 export default function ProjectsScreen({ navigation }) {
-  const [projects, setProjects] = useState(MOCK_PROJECTS ?? []);
+  const [projects, setProjects] = useState([]);
   const [serverCount, setServerCount] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [preparing, setPreparing] = useState(false);
@@ -32,7 +27,7 @@ export default function ProjectsScreen({ navigation }) {
   useEffect(() => {
     api.get('/projects')
       .then(async (r) => { setProjects(r.data); await cacheSet('cache:projects', r.data); })
-      .catch(async () => setProjects((await cacheGet('cache:projects')) || MOCK_PROJECTS))
+      .catch(async () => setProjects((await cacheGet('cache:projects')) || []))
       .then(resort);
   }, []);
 
@@ -110,7 +105,7 @@ export default function ProjectsScreen({ navigation }) {
           data={projects}
           keyExtractor={(p) => p.ProjectId}
           renderItem={({ item }) => <ProjectRow project={item} onOpen={open} />}
-          ListEmptyComponent={<Text style={styles.meta}>No projects.</Text>}
+          ListEmptyComponent={<Text style={styles.meta}>No projects yet — connect to the internet to load them.</Text>}
         />
       </View>
     </>

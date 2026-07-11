@@ -77,3 +77,110 @@ export async function getLastActivityByProject() {
   all.forEach((p) => { map[p.projectId] = Math.max(map[p.projectId] || 0, p.capturedAt || 0); });
   return map;
 }
+
+// ── Offline-first spot management (web parity, see localStore.js for the
+// native/SQLite version and full comments) ──────────────────────────────────
+const SPOT_PREFIX = 'spot:';
+
+async function allSpots() {
+  const allKeys = (await keys()).filter((k) => String(k).startsWith(SPOT_PREFIX));
+  return Promise.all(allKeys.map((k) => get(k)));
+}
+
+export async function insertLocalSpot({ id, projectId, roomId, name, coordinateX, coordinateY, sortOrder }) {
+  await set(SPOT_PREFIX + id, {
+    id, projectId, roomId, name, coordinateX, coordinateY, sortOrder,
+    createdAt: Date.now(), syncStatus: 'pending', remoteId: null, pendingDelete: 0, attempts: 0, lastError: null,
+  });
+}
+
+export async function getLocalSpotsForProject(projectId) {
+  const all = await allSpots();
+  return all.filter((s) => s.projectId === projectId);
+}
+
+export async function queueSpotDelete(spot, projectId) {
+  if (spot._localId) {
+    const row = await get(SPOT_PREFIX + spot._localId);
+    if (row && !row.remoteId) {
+      await del(SPOT_PREFIX + spot._localId);
+    } else if (row) {
+      await set(SPOT_PREFIX + spot._localId, { ...row, pendingDelete: 1 });
+    }
+    return;
+  }
+  await set(SPOT_PREFIX + spot.SpotId, {
+    id: spot.SpotId, projectId, roomId: spot.RoomId, name: spot.SpotName,
+    coordinateX: spot.CoordinateX, coordinateY: spot.CoordinateY, sortOrder: spot.SortOrder,
+    createdAt: Date.now(), syncStatus: 'synced', remoteId: spot.SpotId, pendingDelete: 1, attempts: 0, lastError: null,
+  });
+}
+
+export async function getPendingSyncSpots(projectId) {
+  const all = await getLocalSpotsForProject(projectId);
+  return all.filter((s) => !s.pendingDelete && (s.syncStatus === 'pending' || s.syncStatus === 'failed'));
+}
+
+export async function getPendingDeleteSpots(projectId) {
+  const all = await getLocalSpotsForProject(projectId);
+  return all.filter((s) => s.pendingDelete && s.remoteId);
+}
+
+export async function markSpotSyncing(id) {
+  const s = await get(SPOT_PREFIX + id);
+  await set(SPOT_PREFIX + id, { ...s, syncStatus: 'syncing' });
+}
+export async function markSpotSynced(id, remoteId) {
+  const s = await get(SPOT_PREFIX + id);
+  await set(SPOT_PREFIX + id, { ...s, syncStatus: 'synced', remoteId });
+}
+export async function markSpotSyncFailed(id, errorMsg) {
+  const s = await get(SPOT_PREFIX + id);
+  await set(SPOT_PREFIX + id, { ...s, syncStatus: 'failed', attempts: (s.attempts || 0) + 1, lastError: errorMsg });
+}
+export async function markSpotDeleteFailed(id, errorMsg) {
+  const s = await get(SPOT_PREFIX + id);
+  await set(SPOT_PREFIX + id, { ...s, attempts: (s.attempts || 0) + 1, lastError: errorMsg });
+}
+export async function removeLocalSpot(id) {
+  await del(SPOT_PREFIX + id);
+}
+export async function pruneSyncedSpots(projectId) {
+  const all = await getLocalSpotsForProject(projectId);
+  await Promise.all(all.filter((s) => s.syncStatus === 'synced' && !s.pendingDelete).map((s) => del(SPOT_PREFIX + s.id)));
+}
+
+export async function reassignPhotosSpotId(oldSpotId, newSpotId) {
+  const all = await allPhotos();
+  await Promise.all(
+    all.filter((p) => p.spotId === oldSpotId).map((p) => set(KEY_PREFIX + p.id, { ...p, spotId: newSpotId }))
+  );
+}
+
+export async function getMergedSpotsForFloor(floor, projectId) {
+  if (!floor) return floor;
+  const localRows = await getLocalSpotsForProject(projectId);
+  const deletedRemoteIds = new Set(localRows.filter((r) => r.pendingDelete && r.remoteId).map((r) => r.remoteId));
+  const pendingByRoom = {};
+  localRows
+    .filter((r) => !r.pendingDelete && r.syncStatus !== 'synced')
+    .forEach((r) => {
+      if (!pendingByRoom[r.roomId]) pendingByRoom[r.roomId] = [];
+      pendingByRoom[r.roomId].push({
+        SpotId: r.id, SpotName: r.name, RoomId: r.roomId,
+        CoordinateX: r.coordinateX, CoordinateY: r.coordinateY, SortOrder: r.sortOrder,
+        _localId: r.id, _pendingSync: true,
+      });
+    });
+
+  return {
+    ...floor,
+    rooms: (floor.rooms || []).map((room) => ({
+      ...room,
+      spots: [
+        ...(room.spots || []).filter((s) => !deletedRemoteIds.has(s.SpotId)),
+        ...(pendingByRoom[room.RoomId] || []),
+      ],
+    })),
+  };
+}
