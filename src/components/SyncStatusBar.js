@@ -34,7 +34,7 @@ export default function SyncStatusBar() {
         <View style={styles.bar}>
             <Text style={styles.text}>{pendingTotal > 0 ? `${pendingTotal} photo(s) waiting to upload` : 'All photos synced'}</Text>
             {message ? <Text style={styles.sub}>{message}</Text> : null}
-            <TouchableOpacity style={[styles.btn, (syncing || pendingTotal === 0) && { opacity: 0.5 }]} disabled={syncing || pendingTotal === 0} onPress={runSync}>
+            <TouchableOpacity style={[styles.btn, (syncing || pendingTotal === 0) && { opacity: 0.5 }]} disabled={syncing || pendingTotal === 0} onPress={() => runSync()}>
                 {syncing ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Sync now</Text>}
             </TouchableOpacity>
         </View>

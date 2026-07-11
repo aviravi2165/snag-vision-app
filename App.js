@@ -9,7 +9,9 @@ import { watchConnectivityAndAutoSync } from './src/sync/syncEngine';
 import { initDb } from './src/db/localStore';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { View, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DashboardScreen from './src/screens/DashboardScreen';
+import AppDrawerContent from './src/components/AppDrawerContent';
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -23,6 +25,7 @@ function MainDrawer() {
   return (
     <Drawer.Navigator
       initialRouteName="Dashboard"
+      drawerContent={(props) => <AppDrawerContent {...props} />}
       screenOptions={{
         headerStyle: { backgroundColor: '#16181d' },
         headerTintColor: '#fff',
@@ -44,9 +47,17 @@ function MainDrawer() {
 
 export default function App() {
   const [dbReady, setDbReady] = useState(false);
+  // null = still checking AsyncStorage — don't flash the Login screen for a
+  // worker who's already signed in, and don't block a returning worker who's
+  // offline behind a login call that can't possibly succeed.
+  const [initialRoute, setInitialRoute] = useState(null);
 
   useEffect(() => {
     initDb().then(() => setDbReady(true)).catch((e) => console.error('DB init failed', e));
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem('sv_token').then((token) => setInitialRoute(token ? 'Main' : 'Login'));
   }, []);
 
   useEffect(() => {
@@ -54,7 +65,7 @@ export default function App() {
     return unsub;
   }, []);
 
-  if (!dbReady) {
+  if (!dbReady || !initialRoute) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0e0f12', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color="#D92906" size="large" />
@@ -65,7 +76,10 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <NavigationContainer theme={theme}>
-        <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#16181d' }, headerTintColor: '#fff' }}>
+        <Stack.Navigator
+          initialRouteName={initialRoute}
+          screenOptions={{ headerStyle: { backgroundColor: '#16181d' }, headerTintColor: '#fff' }}
+        >
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Main" component={MainDrawer} options={{ headerShown: false }} />
         </Stack.Navigator>

@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/client';
 import SyncStatusBar from '../components/SyncStatusBar';
 import { cacheGet, cacheSet } from '../data/cache';
+import { ensureLocalPlanImage } from '../data/planCache';
 import { getProjectSyncSummary, getLastActivityByProject, getPhotoCountsBySpot } from '../db/localStore';
 import { runSync, onSyncProgress } from '../sync/syncEngine';
 
@@ -20,6 +21,8 @@ export default function ProjectsScreen({ navigation }) {
   const [projects, setProjects] = useState(MOCK_PROJECTS ?? []);
   const [serverCount, setServerCount] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [prepareStatus, setPrepareStatus] = useState('');
 
   const resort = useCallback(async () => {
     const lastMap = await getLastActivityByProject();
@@ -53,6 +56,34 @@ export default function ProjectsScreen({ navigation }) {
     setRefreshing(false);
   };
 
+  // Deliberate "go dark" action — a worker taps this while still on office
+  // WiFi to pull every project's floor plan + spot layout down before
+  // heading to a site with no signal, instead of relying on incidentally
+  // having opened each project's Capture screen at least once already.
+  const prepareForOffline = async () => {
+    setPreparing(true);
+    let ok = 0, failed = 0;
+    for (const p of projects) {
+      setPrepareStatus(`Caching ${ok + failed + 1}/${projects.length}: ${p.Name}`);
+      try {
+        const r = await api.get(`/projects/${p.ProjectId}/structure`);
+        const localized = await Promise.all(r.data.map(ensureLocalPlanImage));
+        await cacheSet(`cache:structure:${p.ProjectId}`, localized);
+        ok += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setPreparing(false);
+    setPrepareStatus('');
+    Alert.alert(
+      'Ready for offline',
+      failed > 0
+        ? `${ok} of ${projects.length} project(s) cached. ${failed} need signal to retry.`
+        : `All ${ok} project(s) cached — floor plans and spots will load with no network.`
+    );
+  };
+
   const open = async (p) => {
     await AsyncStorage.setItem('sv_project', p.ProjectId);
     navigation.navigate('Capture', { projectId: p.ProjectId, projectName: p.Name });
@@ -64,11 +95,17 @@ export default function ProjectsScreen({ navigation }) {
       <View style={styles.c}>
         <View style={styles.headerRow}>
           <Text style={styles.h}>Select Project</Text>
-          <TouchableOpacity style={styles.refreshBtn} onPress={fetchFromServer} disabled={refreshing}>
-            {refreshing ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.refreshBtnT}>⟳ Refresh from server</Text>}
-          </TouchableOpacity>
+          <View style={styles.headerBtns}>
+            <TouchableOpacity style={styles.refreshBtn} onPress={fetchFromServer} disabled={refreshing}>
+              {refreshing ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.refreshBtnT}>⟳ Refresh</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.refreshBtn, styles.prepareBtn]} onPress={prepareForOffline} disabled={preparing || projects.length === 0}>
+              {preparing ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.refreshBtnT}>⬇ Prepare for offline</Text>}
+            </TouchableOpacity>
+          </View>
         </View>
         {serverCount !== null && <Text style={styles.serverCount}>{serverCount} project(s) on server</Text>}
+        {!!prepareStatus && <Text style={styles.serverCount}>{prepareStatus}</Text>}
         <FlatList
           data={projects}
           keyExtractor={(p) => p.ProjectId}
@@ -132,9 +169,11 @@ function ProjectRow({ project, onOpen }) {
 
 const styles = StyleSheet.create({
   c: { flex: 1, backgroundColor: '#0e0f12', padding: 16 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  headerBtns: { flexDirection: 'row', gap: 8 },
   h: { color: '#fff', fontSize: 22, fontWeight: '700' },
   refreshBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#D92906' },
+  prepareBtn: { borderColor: '#2a2e37', backgroundColor: '#16181d' },
   refreshBtnT: { color: '#fff', fontSize: 12, fontWeight: '600' },
   serverCount: { color: '#9aa0aa', fontSize: 12, marginTop: 6, marginBottom: 4 },
   card: { backgroundColor: '#16181d', borderRadius: 10, padding: 16, marginTop: 12, marginBottom: 2, borderWidth: 1, borderColor: '#2a2e37' },
