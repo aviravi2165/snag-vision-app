@@ -34,6 +34,7 @@ export default function DashboardScreen() {
     const [net, setNet] = useState({ isConnected: false, type: 'unknown', reachable: false, latencyMs: null, checking: true });
     const [cameraConnected, setCameraConnected] = useState(null); // null = checking
     const [photosModal, setPhotosModal] = useState({ visible: false, project: null, photos: [] });
+    const [viewer, setViewer] = useState({ visible: false, uri: null });
     const intervalsRef = useRef([]);
 
     const loadStats = useCallback(async () => {
@@ -206,7 +207,7 @@ export default function DashboardScreen() {
                         keyExtractor={(p) => p.id}
                         contentContainerStyle={{ padding: 16 }}
                         renderItem={({ item }) => (
-                            <View style={styles.photoRow}>
+                            <TouchableOpacity style={styles.photoRow} onPress={() => setViewer({ visible: true, uri: item.localUri })}>
                                 <Image source={{ uri: item.localUri }} style={styles.thumb} />
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.photoStatus}>
@@ -214,10 +215,19 @@ export default function DashboardScreen() {
                                     </Text>
                                     <Text style={styles.photoPath} numberOfLines={2}>{item.localUri}</Text>
                                 </View>
-                            </View>
+                            </TouchableOpacity>
                         )}
                         ListEmptyComponent={<Text style={styles.projectMeta}>No photos captured for this project yet.</Text>}
                     />
+                </View>
+            </Modal>
+
+            <Modal visible={viewer.visible} transparent animationType="fade" onRequestClose={() => setViewer({ visible: false, uri: null })}>
+                <View style={styles.viewerC}>
+                    <TouchableOpacity style={styles.viewerClose} onPress={() => setViewer({ visible: false, uri: null })}>
+                        <Text style={styles.modalClose}>Close</Text>
+                    </TouchableOpacity>
+                    {viewer.uri && <Image source={{ uri: viewer.uri }} style={styles.viewerImg} resizeMode="contain" />}
                 </View>
             </Modal>
         </>
@@ -271,4 +281,7 @@ const styles = StyleSheet.create({
     thumb: { width: 56, height: 56, borderRadius: 6, marginRight: 10, backgroundColor: '#2a2e37' },
     photoStatus: { color: '#e8eaed', fontSize: 12, marginBottom: 4 },
     photoPath: { color: '#6a707b', fontSize: 10 },
+    viewerC: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+    viewerImg: { width: '100%', height: '100%' },
+    viewerClose: { position: 'absolute', top: 48, right: 20, zIndex: 1, backgroundColor: 'rgba(22,24,29,.85)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
 });

@@ -21,4 +21,15 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// The room/spot create+delete endpoints live on the web-facing router (no
+// /mobile prefix, reused as-is from the web admin tooling) — this instance
+// targets the bare host so those paths resolve correctly. Same auth header
+// attached now so nothing needs touching once role checks land there later.
+export const webApi = axios.create({ baseURL: API_BASE_HOST, timeout: 8000 });
+webApi.interceptors.request.use(async (config) => {
+  const token = await AsyncStorage.getItem('sv_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
 export default api;

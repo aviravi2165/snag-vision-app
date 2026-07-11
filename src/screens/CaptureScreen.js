@@ -1,19 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Modal, FlatList } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import uuid from 'react-native-uuid';
 import api from '../api/client';
 import * as osc from '../camera/oscClient';
-import { insertPhoto, getPhotosForSpot, getPhotoCountsBySpot } from '../db/localStore';
+import { insertPhoto, getPhotosForSpot, getPhotoCountsBySpot, getMergedSpotsForFloor } from '../db/localStore';
 import { savePhotoLocally } from '../storage/fileStore';
 import PlanPicker from '../components/PlanPicker';
-import { MOCK_STRUCTURE } from '../data/mockStructure';
 import * as ImagePicker from 'expo-image-picker';
 
 import { cacheGet, cacheSet } from '../data/cache';
 import { ensureLocalPlanImage } from '../data/planCache';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export default function CaptureScreen({ route }) {
+export default function CaptureScreen({ route, navigation }) {
   const [projectId, setProjectId] = useState(route?.params?.projectId ?? null);
   const [projectName, setProjectName] = useState(route?.params?.projectName ?? '');
   const [floors, setFloors] = useState([]);
@@ -84,18 +84,29 @@ export default function CaptureScreen({ route }) {
       setFloors(localized);
       await cacheSet(`cache:structure:${projectId}`, localized);
     };
-    const useCacheOrMock = async () => {
+    const useCacheOrEmpty = async () => {
       const cached = await cacheGet(`cache:structure:${projectId}`);
-      load(hasSpots(cached) ? cached : MOCK_STRUCTURE);
+      if (hasSpots(cached)) load(cached); else setFloors([]);
     };
     api.get(`/projects/${projectId}/structure`)
       // A live response with no spots is as useless as no response — fall
       // back rather than leaving the plan viewer with nothing to click.
-      .then((r) => (hasSpots(r.data) ? load(r.data) : useCacheOrMock()))
-      .catch(useCacheOrMock);
+      .then((r) => (hasSpots(r.data) ? load(r.data) : useCacheOrEmpty()))
+      .catch(useCacheOrEmpty);
   }, [projectId]);
 
   const floor = floors[floorIdx];
+  const [mergedFloor, setMergedFloor] = useState(null);
+
+  // Recomputed on every focus (not just when floor/projectId change) so
+  // returning from a sync — or from adding/deleting spots in Manage Spots —
+  // always reflects the latest local + server spot list.
+  const refreshMergedFloor = useCallback(async () => {
+    if (!floor || !projectId) { setMergedFloor(null); return; }
+    setMergedFloor(await getMergedSpotsForFloor(floor, projectId));
+  }, [floor, projectId]);
+
+  useFocusEffect(useCallback(() => { refreshMergedFloor(); }, [refreshMergedFloor]));
 
   const connectCamera = async () => {
     setConnecting(true);
@@ -181,10 +192,12 @@ export default function CaptureScreen({ route }) {
       </Modal>
 
       <View style={styles.card}>
-        <Text style={styles.planTitle}>Tap your spot on the plan</Text>
+        <View style={styles.planHead}>
+          <Text style={styles.planTitle}>Tap your spot on the plan</Text>
+        </View>
         <PlanPicker
           planUrl={floor?.FloorPlanImageUrl}
-          rooms={floor?.rooms || []}
+          rooms={mergedFloor?.rooms || []}
           activeSpotId={currentSpot?.SpotId}
           counts={spotCounts}
           onSelectSpot={selectSpot}
@@ -243,7 +256,8 @@ const styles = StyleSheet.create({
   modalRowActive: { backgroundColor: '#2a2e37' },
   modalRowT: { color: '#fff', fontWeight: '600' },
   card: { backgroundColor: '#16181d', borderRadius: 10, padding: 16, borderWidth: 1, borderColor: '#2a2e37', marginBottom: 16 },
-  planTitle: { color: '#fff', fontWeight: '700', marginBottom: 10 },
+  planHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  planTitle: { color: '#fff', fontWeight: '700' },
   current: { color: '#9aa0aa', marginTop: 10 },
   row: { color: '#e8eaed', marginBottom: 6 },
   btn: { backgroundColor: '#D92906', padding: 16, borderRadius: 10, marginBottom: 12 },

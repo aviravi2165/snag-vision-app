@@ -5,6 +5,7 @@ import { createDrawerNavigator } from '@react-navigation/drawer';
 import LoginScreen from './src/screens/LoginScreen';
 import ProjectsScreen from './src/screens/ProjectsScreen';
 import CaptureScreen from './src/screens/CaptureScreen';
+import ManageSpotsScreen from './src/screens/ManageSpotsScreen';
 import { watchConnectivityAndAutoSync } from './src/sync/syncEngine';
 import { initDb } from './src/db/localStore';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -41,6 +42,7 @@ function MainDrawer() {
         component={CaptureScreen}
         options={{ title: 'Capture', drawerItemStyle: { display: 'none' } }}
       />
+      <Drawer.Screen name="ManageSpots" component={ManageSpotsScreen} options={{ title: 'Manage Spots' }} />
     </Drawer.Navigator>
   );
 }
