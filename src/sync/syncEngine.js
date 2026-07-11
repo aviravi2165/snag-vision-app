@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getPendingPhotos, markUploading, markDone, markFailed, getUploadSummary } from '../db/localStore';
@@ -50,29 +50,35 @@ export async function runSync(projectId) {
     if (!net.isConnected) { notify({ type: 'offline', projectId }); return { offline: true }; }
 
     isSyncing = true;
-    const pending = await getPendingPhotos(projectId);
-    notify({ type: 'start', total: pending.length, projectId });
+    // Guaranteed reset on the way out, even if something throws mid-loop —
+    // without this, one bad photo/network hiccup could leave isSyncing stuck
+    // `true` forever, silently no-op'ing every future sync tap.
+    try {
+        const pending = await getPendingPhotos(projectId);
+        notify({ type: 'start', total: pending.length, projectId });
 
-    let done = 0, failed = 0;
-    for (const photo of pending) {
-        const still = await NetInfo.fetch();
-        if (!still.isConnected) { notify({ type: 'offline-mid-sync', projectId }); break; }
+        let done = 0, failed = 0;
+        for (const photo of pending) {
+            const still = await NetInfo.fetch();
+            if (!still.isConnected) { notify({ type: 'offline-mid-sync', projectId }); break; }
 
-        await markUploading(photo.id);
-        notify({ type: 'progress', done, failed, total: pending.length, projectId });
-        try {
-            const result = await uploadOne(photo);
-            await markDone(photo.id, result.id || 'ok');
-            done += 1;
-        } catch (e) {
-            await markFailed(photo.id, e.message);
-            failed += 1;
+            await markUploading(photo.id);
+            notify({ type: 'progress', done, failed, total: pending.length, projectId });
+            try {
+                const result = await uploadOne(photo);
+                await markDone(photo.id, result.id || 'ok');
+                done += 1;
+            } catch (e) {
+                await markFailed(photo.id, e.message);
+                failed += 1;
+            }
         }
-    }
 
-    isSyncing = false;
-    notify({ type: 'complete', done, failed, total: pending.length, projectId });
-    return { done, failed, total: pending.length };
+        notify({ type: 'complete', done, failed, total: pending.length, projectId });
+        return { done, failed, total: pending.length };
+    } finally {
+        isSyncing = false;
+    }
 }
 
 export const getQueueSummary = getUploadSummary;
