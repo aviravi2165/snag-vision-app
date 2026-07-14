@@ -48,6 +48,18 @@ export default function ManageSpotsScreen({ route }) {
     AsyncStorage.getItem('sv_project').then((id) => id && setProjectId(id));
   }, [projectId]);
 
+  // React Navigation reuses this screen instance rather than remounting it
+  // when navigated to again with different params, so useState's initial
+  // value alone would keep showing whichever project was first opened.
+  useEffect(() => {
+    const incomingId = route?.params?.projectId;
+    if (!incomingId || incomingId === projectId) return;
+    setProjectId(incomingId);
+    setProjectName(route?.params?.projectName ?? '');
+    setFloors([]);
+    setFloorIdx(0);
+  }, [route?.params?.projectId]);
+
   useEffect(() => {
     cacheGet('cache:projects').then((cached) => setProjects(cached || []));
   }, []);

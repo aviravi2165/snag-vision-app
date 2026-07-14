@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/client';
 import SyncStatusBar from '../components/SyncStatusBar';
@@ -140,6 +141,11 @@ function ProjectRow({ project, onOpen }) {
       if (e.type === 'complete' || e.type === 'offline') { setSyncing(false); refresh(); }
     });
   }, [refresh, project.ProjectId]);
+
+  // The structure cache this reads only actually gets populated the first
+  // time Capture/Manage Spots successfully loads this project — refresh on
+  // every return to this screen so a stale "0/0" doesn't linger after that.
+  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
   const pendingTotal = summary.pending + summary.uploading + summary.failed;
 

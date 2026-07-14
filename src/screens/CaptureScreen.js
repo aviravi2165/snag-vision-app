@@ -31,6 +31,21 @@ export default function CaptureScreen({ route, navigation }) {
   const refreshSpotCounts = async () => setSpotCounts(await getPhotoCountsBySpot());
   useEffect(() => { refreshSpotCounts(); }, []);
 
+  // React Navigation reuses this screen instance rather than remounting it
+  // when navigating here again from Projects with a different project —
+  // useState's initial value only applies once, so without this, opening a
+  // second project after the first would silently keep showing the first.
+  useEffect(() => {
+    const incomingId = route?.params?.projectId;
+    if (!incomingId || incomingId === projectId) return;
+    setProjectId(incomingId);
+    setProjectName(route?.params?.projectName ?? '');
+    setFloors([]);
+    setFloorIdx(0);
+    setCurrentSpot(null);
+    setSpotCount(0);
+  }, [route?.params?.projectId]);
+
   const captureWithPhoneCamera = async () => {
     if (!currentSpot) return;
     const perm = await ImagePicker.requestCameraPermissionsAsync();
