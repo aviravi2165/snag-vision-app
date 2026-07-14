@@ -37,7 +37,7 @@ export default function PlanPicker({
   const [imgState, setImgState] = useState('loading'); // loading | loaded | error
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const pinSize = winW < 380 ? 22 : 26;
+  const pinSize = winW < 380 ? 14 : 17;
 
   const box = { w: viewport.w * zoom, h: viewport.h * zoom };
   const maxPan = { x: Math.max(0, box.w - viewport.w), y: Math.max(0, box.h - viewport.h) };
@@ -111,7 +111,7 @@ export default function PlanPicker({
             {flatSpots.map((s) => {
               const active = s.SpotId === activeSpotId;
               const count = counts[s.SpotId] || 0;
-              const size = active ? pinSize + 6 : pinSize;
+              const size = active ? pinSize + 4 : pinSize;
               return (
                 <TouchableOpacity
                   key={s.SpotId}
@@ -200,8 +200,8 @@ const styles = StyleSheet.create({
   countBadgeT: { color: '#fff', fontSize: 11, fontWeight: '700', fontFamily: fonts.bodySemiBold },
   hint: { position: 'absolute', bottom: 8, left: 8, right: 8, backgroundColor: 'rgba(211,47,47,.92)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
   hintT: { color: '#fff', fontSize: 11, fontWeight: '600', textAlign: 'center', fontFamily: fonts.bodySemiBold },
-  footRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+  footRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, rowGap: 8 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', flexShrink: 1, gap: 10 },
   legendItem: { flexDirection: 'row', alignItems: 'center', marginRight: 14 },
   legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
   legendT: { color: colors.textMuted, fontSize: 12, fontFamily: fonts.body },
