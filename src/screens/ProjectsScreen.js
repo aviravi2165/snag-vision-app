@@ -5,7 +5,7 @@ import api from '../api/client';
 import SyncStatusBar from '../components/SyncStatusBar';
 import { cacheGet, cacheSet } from '../data/cache';
 import { ensureLocalPlanImage } from '../data/planCache';
-import { getProjectSyncSummary, getLastActivityByProject, getPhotoCountsBySpot } from '../db/localStore';
+import { getProjectSyncSummary, getLastActivityByProject, getPhotoCountsBySpot, getMergedStructureForProject } from '../db/localStore';
 import { runSync, onSyncProgress } from '../sync/syncEngine';
 
 function sortByActivity(list, lastMap) {
@@ -121,7 +121,8 @@ function ProjectRow({ project, onOpen }) {
     setSummary(await getProjectSyncSummary(project.ProjectId));
     const structure = await cacheGet(`cache:structure:${project.ProjectId}`);
     if (structure) {
-      const spots = structure.flatMap((f) => (f.rooms || []).flatMap((r) => r.spots || []));
+      const merged = await getMergedStructureForProject(structure, project.ProjectId);
+      const spots = merged.flatMap((f) => (f.rooms || []).flatMap((r) => r.spots || []));
       const counts = await getPhotoCountsBySpot();
       const done = spots.filter((s) => (counts[s.SpotId] || 0) > 0).length;
       setCompletion({ done, total: spots.length });

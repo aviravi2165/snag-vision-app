@@ -184,3 +184,8 @@ export async function getMergedSpotsForFloor(floor, projectId) {
     })),
   };
 }
+
+export async function getMergedStructureForProject(floors, projectId) {
+  if (!floors) return floors;
+  return Promise.all(floors.map((f) => getMergedSpotsForFloor(f, projectId)));
+}

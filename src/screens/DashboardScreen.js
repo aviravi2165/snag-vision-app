@@ -3,7 +3,7 @@ import { View, Text, FlatList, StyleSheet, TouchableOpacity, Modal, Image, Activ
 import { useFocusEffect } from '@react-navigation/native';
 import NetInfo from '@react-native-community/netinfo';
 import { cacheGet } from '../data/cache';
-import { getPhotoCountsBySpot, getSyncSummaryByProject, getUploadSummary, getPhotosForProject } from '../db/localStore';
+import { getPhotoCountsBySpot, getSyncSummaryByProject, getUploadSummary, getPhotosForProject, getMergedStructureForProject } from '../db/localStore';
 import * as osc from '../camera/oscClient';
 import { API_BASE_HOST } from '../api/client';
 import SyncStatusBar from '../components/SyncStatusBar';
@@ -52,7 +52,8 @@ export default function DashboardScreen() {
             const structure = await cacheGet(`cache:structure:${p.ProjectId}`);
             let completion = null;
             if (structure) {
-                const spots = structure.flatMap((f) => (f.rooms || []).flatMap((r) => r.spots || []));
+                const merged = await getMergedStructureForProject(structure, p.ProjectId);
+                const spots = merged.flatMap((f) => (f.rooms || []).flatMap((r) => r.spots || []));
                 completion = { done: spots.filter((s) => (counts[s.SpotId] || 0) > 0).length, total: spots.length };
             }
             nextStats[p.ProjectId] = {

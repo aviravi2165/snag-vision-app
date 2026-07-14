@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Image, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Pressable, useWindowDimensions } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Image, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { API_BASE_HOST } from '../api/client';
 
-const ZOOM_LEVELS = [1, 1.5, 2];
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 3;
+const ZOOM_STEP = 0.5;
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
 // 0 photos = red (pending), 1 = yellow (needs another angle), 2+ = green (done).
@@ -12,13 +14,14 @@ function colorForCount(count) {
   return '#D92906';
 }
 
-// Static floor plan — no pinch/pan. An earlier gesture-based (react-native-
-// gesture-handler + reanimated worklets) version crashed under Fabric, so
-// this sticks to plain RN touch components only (Pressable/TouchableOpacity)
-// — a single, well-supported touch system, nothing mixed. "Zoom" just grows
-// the container taller via the +/- buttons below (resizeMode="contain" keeps
-// the whole plan visible at any zoom level, so there's never anything to pan
-// to — no scrolling needed).
+// Google-Maps-style single-image viewer: a fixed-size viewport with the
+// (possibly zoomed-in) plan scrollable inside it — drag to pan in any
+// direction, +/- buttons to zoom. Deliberately no pinch and no mouse wheel,
+// only the two buttons drive zoom. Built on plain RN ScrollView/Touchable
+// components only (no gesture-handler/reanimated) — a nested pinch+pan
+// gesture-handler version of this crashed under Fabric; ScrollView is RN's
+// own native, single touch system and doesn't mix with the TouchableOpacity
+// pins the way that did.
 // editMode swaps normal spot-select taps for add/delete (used by the
 // Manage Spots screen only — Capture screen never sets this).
 export default function PlanPicker({
@@ -26,15 +29,26 @@ export default function PlanPicker({
   onSelectSpot, editMode = false, onAddPoint, onDeleteSpot,
 }) {
   const { width: winW } = useWindowDimensions();
-  const [box, setBox] = useState({ w: 1, h: 1 });
+  const [viewport, setViewport] = useState({ w: 1, h: 1 });
   const [imgState, setImgState] = useState('loading'); // loading | loaded | error
-  const [zoomIdx, setZoomIdx] = useState(0);
+  const [zoom, setZoom] = useState(MIN_ZOOM);
+  const hScrollRef = useRef(null);
+  const vScrollRef = useRef(null);
   const pinSize = winW < 380 ? 22 : 26;
-  const zoom = ZOOM_LEVELS[zoomIdx];
 
+  const box = { w: viewport.w * zoom, h: viewport.h * zoom };
   const flatSpots = rooms.flatMap((r) => (r.spots || []).map((s) => ({ ...s, RoomId: s.RoomId || r.RoomId })));
 
   useEffect(() => { setImgState('loading'); }, [planUrl]);
+
+  const zoomTo = (next) => {
+    const clamped = clamp(next, MIN_ZOOM, MAX_ZOOM);
+    setZoom(clamped);
+    if (clamped === MIN_ZOOM) {
+      hScrollRef.current?.scrollTo({ x: 0, animated: true });
+      vScrollRef.current?.scrollTo({ y: 0, animated: true });
+    }
+  };
 
   const handleBackgroundPress = (e) => {
     if (!editMode || !onAddPoint) return;
@@ -52,53 +66,71 @@ export default function PlanPicker({
 
   return (
     <View>
-      <Pressable onPress={handleBackgroundPress}>
-        <View
-          style={[styles.wrap, { aspectRatio: 1 / zoom }]}
-          onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+      <View
+        style={styles.viewport}
+        onLayout={(e) => setViewport({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+      >
+        <ScrollView
+          ref={hScrollRef}
+          horizontal
+          scrollEnabled={zoom > MIN_ZOOM}
+          showsHorizontalScrollIndicator={false}
+          bounces={false}
         >
-          <Image
-            source={{ uri }}
-            style={styles.img}
-            resizeMode="contain"
-            onLoad={() => setImgState('loaded')}
-            onError={() => setImgState('error')}
-          />
-          {flatSpots.map((s) => {
-            const active = s.SpotId === activeSpotId;
-            const count = counts[s.SpotId] || 0;
-            const size = active ? pinSize + 6 : pinSize;
-            return (
-              <TouchableOpacity
-                key={s.SpotId}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                onPress={() => (editMode ? onDeleteSpot?.(s) : onSelectSpot?.(s))}
-                style={[styles.pin, {
-                  left: s.CoordinateX * box.w - size / 2, top: s.CoordinateY * box.h - size / 2,
-                  backgroundColor: editMode ? '#6a707b' : colorForCount(count),
-                  borderColor: active ? '#fff' : 'rgba(255,255,255,0.55)',
-                  width: size, height: size, borderRadius: size / 2,
-                }]}
-              >
-                <Text style={styles.pinT}>{editMode ? '✕' : s.SortOrder}</Text>
-              </TouchableOpacity>
-            );
-          })}
-          {imgState !== 'loaded' && (
-            <View style={styles.imgOverlay} pointerEvents="none">
-              {imgState === 'loading'
-                ? <ActivityIndicator color="#D92906" />
-                : <Text style={styles.imgOverlayT}>Plan image unavailable — spots below still work</Text>}
-            </View>
-          )}
-          {editMode && (
-            <View style={styles.hint} pointerEvents="none">
-              <Text style={styles.hintT}>Tap empty space to add a spot · tap a pin to delete it</Text>
-            </View>
-          )}
-        </View>
-      </Pressable>
+          <ScrollView
+            ref={vScrollRef}
+            scrollEnabled={zoom > MIN_ZOOM}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <Pressable onPress={handleBackgroundPress}>
+              <View style={{ width: box.w, height: box.h }}>
+                <Image
+                  source={{ uri }}
+                  style={styles.img}
+                  resizeMode="contain"
+                  onLoad={() => setImgState('loaded')}
+                  onError={() => setImgState('error')}
+                />
+                {flatSpots.map((s) => {
+                  const active = s.SpotId === activeSpotId;
+                  const count = counts[s.SpotId] || 0;
+                  const size = active ? pinSize + 6 : pinSize;
+                  return (
+                    <TouchableOpacity
+                      key={s.SpotId}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      onPress={() => (editMode ? onDeleteSpot?.(s) : onSelectSpot?.(s))}
+                      style={[styles.pin, {
+                        left: s.CoordinateX * box.w - size / 2, top: s.CoordinateY * box.h - size / 2,
+                        backgroundColor: editMode ? '#6a707b' : colorForCount(count),
+                        borderColor: active ? '#fff' : 'rgba(255,255,255,0.55)',
+                        width: size, height: size, borderRadius: size / 2,
+                      }]}
+                    >
+                      <Text style={styles.pinT}>{editMode ? '✕' : s.SortOrder}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </Pressable>
+          </ScrollView>
+        </ScrollView>
+
+        {imgState !== 'loaded' && (
+          <View style={styles.imgOverlay} pointerEvents="none">
+            {imgState === 'loading'
+              ? <ActivityIndicator color="#D92906" />
+              : <Text style={styles.imgOverlayT}>Plan image unavailable — spots below still work</Text>}
+          </View>
+        )}
+        {editMode && (
+          <View style={styles.hint} pointerEvents="none">
+            <Text style={styles.hintT}>Tap empty space to add a spot · tap a pin to delete it</Text>
+          </View>
+        )}
+      </View>
 
       <View style={styles.footRow}>
         {!editMode && (
@@ -110,16 +142,16 @@ export default function PlanPicker({
         )}
         <View style={styles.zoomRow}>
           <TouchableOpacity
-            style={[styles.zoomBtn, zoomIdx === 0 && styles.zoomBtnDisabled]}
-            disabled={zoomIdx === 0}
-            onPress={() => setZoomIdx((i) => Math.max(i - 1, 0))}
+            style={[styles.zoomBtn, zoom <= MIN_ZOOM && styles.zoomBtnDisabled]}
+            disabled={zoom <= MIN_ZOOM}
+            onPress={() => zoomTo(zoom - ZOOM_STEP)}
           >
             <Text style={styles.zoomBtnT}>−</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.zoomBtn, zoomIdx === ZOOM_LEVELS.length - 1 && styles.zoomBtnDisabled]}
-            disabled={zoomIdx === ZOOM_LEVELS.length - 1}
-            onPress={() => setZoomIdx((i) => Math.min(i + 1, ZOOM_LEVELS.length - 1))}
+            style={[styles.zoomBtn, zoom >= MAX_ZOOM && styles.zoomBtnDisabled]}
+            disabled={zoom >= MAX_ZOOM}
+            onPress={() => zoomTo(zoom + ZOOM_STEP)}
           >
             <Text style={styles.zoomBtnT}>+</Text>
           </TouchableOpacity>
@@ -139,7 +171,7 @@ function LegendItem({ color, label }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { width: '100%', backgroundColor: '#1f222a', borderRadius: 8, overflow: 'hidden' },
+  viewport: { width: '100%', aspectRatio: 1, backgroundColor: '#1f222a', borderRadius: 8, overflow: 'hidden' },
   img: { width: '100%', height: '100%' },
   imgOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: 16 },
   imgOverlayT: { color: '#9aa0aa', textAlign: 'center', fontSize: 12 },

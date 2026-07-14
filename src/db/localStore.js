@@ -282,3 +282,11 @@ export async function getMergedSpotsForFloor(floor, projectId) {
         })),
     };
 }
+
+// Same merge as getMergedSpotsForFloor, but for every floor in a cached
+// project structure at once — used anywhere that counts/lists spots across
+// a whole project (Projects and Dashboard screens) rather than one floor.
+export async function getMergedStructureForProject(floors, projectId) {
+    if (!floors) return floors;
+    return Promise.all(floors.map((f) => getMergedSpotsForFloor(f, projectId)));
+}
