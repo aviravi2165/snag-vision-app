@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { cacheGet, cacheSet } from '../data/cache';
 import { ensureLocalPlanImage } from '../data/planCache';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { colors, fonts, radius } from '../theme';
 
 export default function CaptureScreen({ route, navigation }) {
   const [projectId, setProjectId] = useState(route?.params?.projectId ?? null);
@@ -203,13 +204,13 @@ export default function CaptureScreen({ route, navigation }) {
           onSelectSpot={selectSpot}
         />
         <Text style={styles.current}>
-          Current spot: <Text style={{ color: '#4fae5e' }}>{currentSpot?.SpotName || 'none selected'}</Text>
+          Current spot: <Text style={{ color: colors.success }}>{currentSpot?.SpotName || 'none selected'}</Text>
           {currentSpot ? `  ·  ${spotCount} photo(s) saved` : ''}
         </Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.row}>Status: <Text style={{ color: '#D92906' }}>{status}</Text></Text>
+        <Text style={styles.row}>Status: <Text style={{ color: colors.accent }}>{status}</Text></Text>
       </View>
 
       {!connected ? (
@@ -230,7 +231,7 @@ export default function CaptureScreen({ route, navigation }) {
       )}
 
       <TouchableOpacity
-        style={[styles.btn, { backgroundColor: '#2a2e37' }, (!currentSpot || capturing) && { opacity: 0.5 }]}
+        style={[styles.btn, styles.btnSecondary, (!currentSpot || capturing) && { opacity: 0.5 }]}
         disabled={!currentSpot || capturing}
         onPress={captureWithPhoneCamera}
       >
@@ -245,22 +246,23 @@ export default function CaptureScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  c: { flex: 1, backgroundColor: '#0e0f12', padding: 16 },
-  h: { color: '#fff', fontSize: 22, fontWeight: '700', marginBottom: 12 },
-  floorSelect: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#16181d', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#2a2e37', marginBottom: 16 },
-  floorSelectLabel: { color: '#9aa0aa', fontSize: 12 },
-  floorSelectValue: { color: '#fff', fontWeight: '700' },
+  c: { flex: 1, backgroundColor: colors.bg, padding: 16 },
+  h: { color: colors.text, fontSize: 22, fontWeight: '700', marginBottom: 12, fontFamily: fonts.headingBold, letterSpacing: -0.4 },
+  floorSelect: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  floorSelectLabel: { color: colors.textMuted, fontSize: 12, fontFamily: fonts.body },
+  floorSelectValue: { color: colors.text, fontWeight: '700', fontFamily: fonts.bodySemiBold },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.5)', justifyContent: 'center', padding: 24 },
-  modalCard: { backgroundColor: '#16181d', borderRadius: 10, borderWidth: 1, borderColor: '#2a2e37', maxHeight: 320, overflow: 'hidden' },
-  modalRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#2a2e37' },
-  modalRowActive: { backgroundColor: '#2a2e37' },
-  modalRowT: { color: '#fff', fontWeight: '600' },
-  card: { backgroundColor: '#16181d', borderRadius: 10, padding: 16, borderWidth: 1, borderColor: '#2a2e37', marginBottom: 16 },
+  modalCard: { backgroundColor: colors.surface, borderRadius: radius.card, maxHeight: 320, overflow: 'hidden' },
+  modalRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  modalRowActive: { backgroundColor: colors.accentLight },
+  modalRowT: { color: colors.text, fontWeight: '600', fontFamily: fonts.bodySemiBold },
+  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   planHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  planTitle: { color: '#fff', fontWeight: '700' },
-  current: { color: '#9aa0aa', marginTop: 10 },
-  row: { color: '#e8eaed', marginBottom: 6 },
-  btn: { backgroundColor: '#D92906', padding: 16, borderRadius: 10, marginBottom: 12 },
-  btnText: { color: '#fff', textAlign: 'center', fontWeight: '700' },
-  note: { color: '#9aa0aa', fontSize: 12, marginTop: 8 },
+  planTitle: { color: colors.text, fontWeight: '700', fontFamily: fonts.heading },
+  current: { color: colors.textMuted, marginTop: 10, fontFamily: fonts.body },
+  row: { color: colors.textBody, marginBottom: 6, fontFamily: fonts.body },
+  btn: { backgroundColor: colors.accent, padding: 16, borderRadius: radius.button, marginBottom: 12 },
+  btnSecondary: { backgroundColor: colors.textMuted },
+  btnText: { color: '#fff', textAlign: 'center', fontWeight: '700', fontFamily: fonts.bodySemiBold },
+  note: { color: colors.textMuted, fontSize: 12, marginTop: 8, fontFamily: fonts.body },
 });

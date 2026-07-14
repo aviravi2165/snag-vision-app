@@ -7,6 +7,7 @@ import { cacheGet, cacheSet } from '../data/cache';
 import { ensureLocalPlanImage } from '../data/planCache';
 import { getProjectSyncSummary, getLastActivityByProject, getPhotoCountsBySpot, getMergedStructureForProject } from '../db/localStore';
 import { runSync, onSyncProgress } from '../sync/syncEngine';
+import { colors, fonts, radius } from '../theme';
 
 function sortByActivity(list, lastMap) {
   return [...list].sort((a, b) => (lastMap[b.ProjectId] || 0) - (lastMap[a.ProjectId] || 0));
@@ -92,10 +93,10 @@ export default function ProjectsScreen({ navigation }) {
           <Text style={styles.h}>Select Project</Text>
           <View style={styles.headerBtns}>
             <TouchableOpacity style={styles.refreshBtn} onPress={fetchFromServer} disabled={refreshing}>
-              {refreshing ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.refreshBtnT}>⟳ Refresh</Text>}
+              {refreshing ? <ActivityIndicator color={colors.accent} size="small" /> : <Text style={styles.refreshBtnT}>⟳ Refresh</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={[styles.refreshBtn, styles.prepareBtn]} onPress={prepareForOffline} disabled={preparing || projects.length === 0}>
-              {preparing ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.refreshBtnT}>⬇ Prepare for offline</Text>}
+              {preparing ? <ActivityIndicator color={colors.accent} size="small" /> : <Text style={styles.refreshBtnT}>⬇ Prepare for offline</Text>}
             </TouchableOpacity>
           </View>
         </View>
@@ -164,18 +165,18 @@ function ProjectRow({ project, onOpen }) {
 }
 
 const styles = StyleSheet.create({
-  c: { flex: 1, backgroundColor: '#0e0f12', padding: 16 },
+  c: { flex: 1, backgroundColor: colors.bg, padding: 16 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   headerBtns: { flexDirection: 'row', gap: 8 },
-  h: { color: '#fff', fontSize: 22, fontWeight: '700' },
-  refreshBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#D92906' },
-  prepareBtn: { borderColor: '#2a2e37', backgroundColor: '#16181d' },
-  refreshBtnT: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  serverCount: { color: '#9aa0aa', fontSize: 12, marginTop: 6, marginBottom: 4 },
-  card: { backgroundColor: '#16181d', borderRadius: 10, padding: 16, marginTop: 12, marginBottom: 2, borderWidth: 1, borderColor: '#2a2e37' },
-  name: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  meta: { color: '#9aa0aa', marginTop: 4 },
+  h: { color: colors.text, fontSize: 22, fontWeight: '700', fontFamily: fonts.headingBold, letterSpacing: -0.4 },
+  refreshBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.button, borderWidth: 1, borderColor: colors.accent },
+  prepareBtn: { borderColor: colors.border, backgroundColor: colors.surface },
+  refreshBtnT: { color: colors.accent, fontSize: 12, fontWeight: '600', fontFamily: fonts.bodySemiBold },
+  serverCount: { color: colors.textMuted, fontSize: 12, marginTop: 6, marginBottom: 4, fontFamily: fonts.body },
+  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginTop: 12, marginBottom: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  name: { color: colors.text, fontSize: 16, fontWeight: '700', fontFamily: fonts.heading },
+  meta: { color: colors.textMuted, marginTop: 4, fontFamily: fonts.body },
   rowBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
-  syncBtn: { backgroundColor: '#D92906', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  syncBtnT: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  syncBtn: { backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.button },
+  syncBtnT: { color: '#fff', fontSize: 12, fontWeight: '700', fontFamily: fonts.bodySemiBold },
 });

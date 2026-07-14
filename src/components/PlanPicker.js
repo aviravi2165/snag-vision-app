@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Image, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { API_BASE_HOST } from '../api/client';
+import { colors, fonts, radius } from '../theme';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
@@ -9,9 +10,9 @@ const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
 // 0 photos = red (pending), 1 = yellow (needs another angle), 2+ = green (done).
 function colorForCount(count) {
-  if (count >= 2) return '#4fae5e';
-  if (count === 1) return '#e3b341';
-  return '#D92906';
+  if (count >= 2) return colors.success;
+  if (count === 1) return colors.warning;
+  return colors.accent;
 }
 
 // Google-Maps-style single-image viewer: a fixed-size viewport with the
@@ -104,8 +105,8 @@ export default function PlanPicker({
                       onPress={() => (editMode ? onDeleteSpot?.(s) : onSelectSpot?.(s))}
                       style={[styles.pin, {
                         left: s.CoordinateX * box.w - size / 2, top: s.CoordinateY * box.h - size / 2,
-                        backgroundColor: editMode ? '#6a707b' : colorForCount(count),
-                        borderColor: active ? '#fff' : 'rgba(255,255,255,0.55)',
+                        backgroundColor: editMode ? colors.textMuted : colorForCount(count),
+                        borderColor: active ? '#fff' : 'rgba(255,255,255,0.7)',
                         width: size, height: size, borderRadius: size / 2,
                       }]}
                     >
@@ -121,7 +122,7 @@ export default function PlanPicker({
         {imgState !== 'loaded' && (
           <View style={styles.imgOverlay} pointerEvents="none">
             {imgState === 'loading'
-              ? <ActivityIndicator color="#D92906" />
+              ? <ActivityIndicator color={colors.accent} />
               : <Text style={styles.imgOverlayT}>Plan image unavailable — spots below still work</Text>}
           </View>
         )}
@@ -135,9 +136,9 @@ export default function PlanPicker({
       <View style={styles.footRow}>
         {!editMode && (
           <View style={styles.legend}>
-            <LegendItem color="#D92906" label="Pending" />
-            <LegendItem color="#e3b341" label="1 photo" />
-            <LegendItem color="#4fae5e" label="2+ photos" />
+            <LegendItem color={colors.accent} label="Pending" />
+            <LegendItem color={colors.warning} label="1 photo" />
+            <LegendItem color={colors.success} label="2+ photos" />
           </View>
         )}
         <View style={styles.zoomRow}>
@@ -171,23 +172,23 @@ function LegendItem({ color, label }) {
 }
 
 const styles = StyleSheet.create({
-  viewport: { width: '100%', aspectRatio: 1, backgroundColor: '#1f222a', borderRadius: 8, overflow: 'hidden' },
+  viewport: { width: '100%', aspectRatio: 1, backgroundColor: colors.surfaceHover, borderRadius: radius.button, overflow: 'hidden' },
   img: { width: '100%', height: '100%' },
   imgOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: 16 },
-  imgOverlayT: { color: '#9aa0aa', textAlign: 'center', fontSize: 12 },
+  imgOverlayT: { color: colors.textMuted, textAlign: 'center', fontSize: 12, fontFamily: fonts.body },
   pin: { position: 'absolute', borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  pinT: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  ph: { height: 180, borderRadius: 8, borderWidth: 1, borderColor: '#2a2e37', alignItems: 'center', justifyContent: 'center', backgroundColor: '#16181d' },
-  phT: { color: '#9aa0aa' },
-  hint: { position: 'absolute', top: 8, left: 8, right: 8, backgroundColor: 'rgba(217,41,6,.92)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
-  hintT: { color: '#fff', fontSize: 11, fontWeight: '600', textAlign: 'center' },
+  pinT: { color: '#fff', fontSize: 11, fontWeight: '700', fontFamily: fonts.bodySemiBold },
+  ph: { height: 180, borderRadius: radius.button, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  phT: { color: colors.textMuted, fontFamily: fonts.body },
+  hint: { position: 'absolute', top: 8, left: 8, right: 8, backgroundColor: 'rgba(211,47,47,.92)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
+  hintT: { color: '#fff', fontSize: 11, fontWeight: '600', textAlign: 'center', fontFamily: fonts.bodySemiBold },
   footRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   legendItem: { flexDirection: 'row', alignItems: 'center', marginRight: 14 },
   legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
-  legendT: { color: '#9aa0aa', fontSize: 12 },
+  legendT: { color: colors.textMuted, fontSize: 12, fontFamily: fonts.body },
   zoomRow: { flexDirection: 'row', gap: 8, marginLeft: 'auto' },
-  zoomBtn: { width: 30, height: 30, borderRadius: 6, borderWidth: 1, borderColor: '#2a2e37', backgroundColor: '#16181d', alignItems: 'center', justifyContent: 'center' },
+  zoomBtn: { width: 30, height: 30, borderRadius: radius.button, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   zoomBtnDisabled: { opacity: 0.4 },
-  zoomBtnT: { color: '#fff', fontSize: 16, fontWeight: '700', lineHeight: 18 },
+  zoomBtnT: { color: colors.text, fontSize: 16, fontWeight: '700', lineHeight: 18, fontFamily: fonts.bodySemiBold },
 });

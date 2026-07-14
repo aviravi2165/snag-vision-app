@@ -7,19 +7,27 @@ import api, { webApi } from '../api/client';
 import PlanPicker from '../components/PlanPicker';
 import { cacheGet, cacheSet } from '../data/cache';
 import { insertLocalSpot, queueSpotDelete, getMergedSpotsForFloor } from '../db/localStore';
+import { colors, fonts, radius } from '../theme';
 
 // Drawer-visible, offline-first spot manager: a worker at a site with no
 // WiFi can add/remove spots here and they show up immediately — the
 // creates/deletes just queue locally (see localStore's `spots` table) and
-// actually reach the server the next time "Sync this project" runs. No role
-// check yet — deliberately open to anyone for now; gate this screen once
-// real user roles land. Room creation is the one thing that still requires
-// a live connection (a one-time per-floor setup step, unlike ongoing spots).
+// actually reach the server the next time "Sync this project" runs.
+// Editing (add/delete a spot) is restricted to admin/project_manager,
+// matching the backend's own POST/DELETE /mobile/spots role check — anyone
+// else can still open this screen to view spots and completion status,
+// just can't change them. Room creation is the one thing that still
+// requires a live connection (a one-time per-floor setup step, unlike
+// ongoing spots).
 export default function ManageSpotsScreen({ route }) {
   const [projectId, setProjectId] = useState(route?.params?.projectId ?? null);
   const [projectName, setProjectName] = useState(route?.params?.projectName ?? '');
   const [projects, setProjects] = useState([]);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [role, setRole] = useState(null);
+
+  useEffect(() => { AsyncStorage.getItem('sv_role').then(setRole); }, []);
+  const canEdit = role === 'admin' || role === 'project_manager';
 
   const [floors, setFloors] = useState([]);
   const [floorIdx, setFloorIdx] = useState(0);
@@ -100,7 +108,7 @@ export default function ManageSpotsScreen({ route }) {
   const pendingCount = allSpots.filter((s) => s._pendingSync).length;
 
   const createRoom = async () => {
-    if (!roomNameInput.trim() || !floor) return;
+    if (!canEdit || !roomNameInput.trim() || !floor) return;
     setBusy(true);
     try {
       await webApi.post(`/projects/floors/${floor.FloorId}/rooms`, { name: roomNameInput.trim() });
@@ -113,13 +121,13 @@ export default function ManageSpotsScreen({ route }) {
   };
 
   const handleAddPoint = (x, y) => {
-    if (!room) return;
+    if (!canEdit || !room) return;
     setPendingPoint({ x, y });
     setSpotNameInput(`Spot ${(room.spots?.length || 0) + 1}`);
   };
 
   const confirmAddSpot = async () => {
-    if (!spotNameInput.trim() || !pendingPoint || !room) return;
+    if (!canEdit || !spotNameInput.trim() || !pendingPoint || !room) return;
     setBusy(true);
     try {
       await insertLocalSpot({
@@ -140,6 +148,7 @@ export default function ManageSpotsScreen({ route }) {
   };
 
   const handleDeleteSpot = (spot) => {
+    if (!canEdit) return;
     Alert.alert('Delete spot', `Remove "${spot.SpotName}"? Any photos already captured for it stay in the queue, just unlinked from a live spot.`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -168,7 +177,7 @@ export default function ManageSpotsScreen({ route }) {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#D92906" size="large" />
+        <ActivityIndicator color={colors.accent} size="large" />
       </View>
     );
   }
@@ -231,22 +240,33 @@ export default function ManageSpotsScreen({ route }) {
       ) : !room ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>This floor has no rooms yet</Text>
-          <Text style={styles.cardSub}>Spots belong to a room — create one first. This step needs a live connection.</Text>
-          <TextInput style={styles.input} value={roomNameInput} onChangeText={setRoomNameInput} placeholder="e.g. Lobby" placeholderTextColor="#5a5f6a" />
-          <TouchableOpacity style={[styles.btn, busy && { opacity: 0.6 }]} onPress={createRoom} disabled={busy}>
-            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Create room</Text>}
-          </TouchableOpacity>
+          {canEdit ? (
+            <>
+              <Text style={styles.cardSub}>Spots belong to a room — create one first. This step needs a live connection.</Text>
+              <TextInput style={styles.input} value={roomNameInput} onChangeText={setRoomNameInput} placeholder="e.g. Lobby" placeholderTextColor={colors.placeholder} />
+              <TouchableOpacity style={[styles.btn, busy && { opacity: 0.6 }]} onPress={createRoom} disabled={busy}>
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Create room</Text>}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={styles.cardSub}>Ask an admin or project manager to set one up.</Text>
+          )}
         </View>
       ) : (
         <View style={styles.card}>
           <View style={styles.rowBetween}>
             <Text style={styles.cardTitle}>{room.RoomName}</Text>
-            {busy && <ActivityIndicator color="#D92906" size="small" />}
+            {busy && <ActivityIndicator color={colors.accent} size="small" />}
           </View>
+          {!canEdit && role && (
+            <View style={styles.permNotice}>
+              <Text style={styles.permNoticeT}>View only — only admins and project managers can add or remove spots.</Text>
+            </View>
+          )}
           <PlanPicker
             planUrl={floor?.FloorPlanImageUrl}
             rooms={mergedFloor?.rooms || []}
-            editMode
+            editMode={canEdit}
             onAddPoint={handleAddPoint}
             onDeleteSpot={handleDeleteSpot}
           />
@@ -259,9 +279,11 @@ export default function ManageSpotsScreen({ route }) {
                   <Text style={styles.spotRowT} numberOfLines={1}>
                     {s.SortOrder}. {s.SpotName}{s._pendingSync ? ' · pending sync' : ''}
                   </Text>
-                  <TouchableOpacity style={styles.spotDeleteBtn} onPress={() => handleDeleteSpot(s)}>
-                    <Text style={styles.spotDeleteBtnT}>✕</Text>
-                  </TouchableOpacity>
+                  {canEdit && (
+                    <TouchableOpacity style={styles.spotDeleteBtn} onPress={() => handleDeleteSpot(s)}>
+                      <Text style={styles.spotDeleteBtnT}>✕</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ))}
             </View>
@@ -273,7 +295,7 @@ export default function ManageSpotsScreen({ route }) {
         <View style={styles.modalOverlay}>
           <View style={styles.addCard}>
             <Text style={styles.cardTitle}>Name this spot</Text>
-            <TextInput style={styles.input} value={spotNameInput} onChangeText={setSpotNameInput} autoFocus placeholder="Spot name" placeholderTextColor="#5a5f6a" />
+            <TextInput style={styles.input} value={spotNameInput} onChangeText={setSpotNameInput} autoFocus placeholder="Spot name" placeholderTextColor={colors.placeholder} />
             <View style={styles.rowGap}>
               <TouchableOpacity style={[styles.btn, styles.btnGhost, { flex: 1 }]} onPress={() => setPendingPoint(null)}>
                 <Text style={styles.btnGhostText}>Cancel</Text>
@@ -290,35 +312,37 @@ export default function ManageSpotsScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
-  c: { flex: 1, backgroundColor: '#0e0f12', padding: 16 },
-  center: { flex: 1, backgroundColor: '#0e0f12', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  c: { flex: 1, backgroundColor: colors.bg, padding: 16 },
+  center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24 },
   projectRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  h: { color: '#fff', fontSize: 22, fontWeight: '700' },
-  switchLink: { color: '#D92906', fontSize: 12, fontWeight: '600' },
-  sub: { color: '#9aa0aa', fontSize: 12, marginTop: 2, marginBottom: 16 },
-  floorSelect: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#16181d', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#2a2e37', marginBottom: 16 },
-  floorSelectLabel: { color: '#9aa0aa', fontSize: 12 },
-  floorSelectValue: { color: '#fff', fontWeight: '700' },
+  h: { color: colors.text, fontSize: 22, fontWeight: '700', fontFamily: fonts.headingBold, letterSpacing: -0.4 },
+  switchLink: { color: colors.accent, fontSize: 12, fontWeight: '600', fontFamily: fonts.bodySemiBold },
+  sub: { color: colors.textMuted, fontSize: 12, marginTop: 2, marginBottom: 16, fontFamily: fonts.body },
+  floorSelect: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  floorSelectLabel: { color: colors.textMuted, fontSize: 12, fontFamily: fonts.body },
+  floorSelectValue: { color: colors.text, fontWeight: '700', fontFamily: fonts.bodySemiBold },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.5)', justifyContent: 'center', padding: 24 },
-  modalCard: { backgroundColor: '#16181d', borderRadius: 10, borderWidth: 1, borderColor: '#2a2e37', maxHeight: 320, overflow: 'hidden' },
-  modalRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#2a2e37' },
-  modalRowActive: { backgroundColor: '#2a2e37' },
-  modalRowT: { color: '#fff', fontWeight: '600' },
-  card: { backgroundColor: '#16181d', borderRadius: 10, padding: 16, borderWidth: 1, borderColor: '#2a2e37', marginBottom: 16 },
-  cardTitle: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  cardSub: { color: '#9aa0aa', fontSize: 12, marginTop: 4, marginBottom: 12 },
+  modalCard: { backgroundColor: colors.surface, borderRadius: radius.card, maxHeight: 320, overflow: 'hidden' },
+  modalRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  modalRowActive: { backgroundColor: colors.accentLight },
+  modalRowT: { color: colors.text, fontWeight: '600', fontFamily: fonts.bodySemiBold },
+  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15, fontFamily: fonts.heading },
+  cardSub: { color: colors.textMuted, fontSize: 12, marginTop: 4, marginBottom: 12, fontFamily: fonts.body },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   rowGap: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  count: { color: '#9aa0aa', fontSize: 12, marginTop: 10 },
-  spotList: { marginTop: 10, borderTopWidth: 1, borderTopColor: '#2a2e37', paddingTop: 6 },
+  count: { color: colors.textMuted, fontSize: 12, marginTop: 10, fontFamily: fonts.body },
+  permNotice: { backgroundColor: colors.infoBg, borderRadius: radius.button, padding: 10, marginBottom: 10 },
+  permNoticeT: { color: colors.info, fontSize: 12, fontFamily: fonts.bodyMedium },
+  spotList: { marginTop: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6 },
   spotRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
-  spotRowT: { color: '#e8eaed', fontSize: 13, flex: 1, marginRight: 10 },
-  spotDeleteBtn: { width: 22, height: 22, borderRadius: 5, borderWidth: 1, borderColor: '#2a2e37', alignItems: 'center', justifyContent: 'center' },
-  spotDeleteBtnT: { color: '#D92906', fontSize: 12, fontWeight: '700' },
-  input: { backgroundColor: '#1f222a', color: '#fff', borderRadius: 10, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#2a2e37' },
-  btn: { backgroundColor: '#D92906', padding: 14, borderRadius: 10, alignItems: 'center' },
-  btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#2a2e37' },
-  btnText: { color: '#fff', fontWeight: '700' },
-  btnGhostText: { color: '#e8eaed', fontWeight: '700' },
-  addCard: { backgroundColor: '#16181d', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#2a2e37' },
+  spotRowT: { color: colors.textBody, fontSize: 13, flex: 1, marginRight: 10, fontFamily: fonts.body },
+  spotDeleteBtn: { width: 22, height: 22, borderRadius: 5, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  spotDeleteBtnT: { color: colors.accent, fontSize: 12, fontWeight: '700', fontFamily: fonts.bodySemiBold },
+  input: { backgroundColor: colors.surfaceHover, color: colors.text, borderRadius: radius.button, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: colors.border, fontFamily: fonts.body },
+  btn: { backgroundColor: colors.accent, padding: 14, borderRadius: radius.button, alignItems: 'center' },
+  btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border },
+  btnText: { color: '#fff', fontWeight: '700', fontFamily: fonts.bodySemiBold },
+  btnGhostText: { color: colors.textBody, fontWeight: '700', fontFamily: fonts.bodySemiBold },
+  addCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 20, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
 });

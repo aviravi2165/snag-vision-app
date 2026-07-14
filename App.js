@@ -3,6 +3,7 @@ import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import LoginScreen from './src/screens/LoginScreen';
+import RegisterScreen from './src/screens/RegisterScreen';
 import ProjectsScreen from './src/screens/ProjectsScreen';
 import CaptureScreen from './src/screens/CaptureScreen';
 import ManageSpotsScreen from './src/screens/ManageSpotsScreen';
@@ -13,13 +14,16 @@ import { View, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DashboardScreen from './src/screens/DashboardScreen';
 import AppDrawerContent from './src/components/AppDrawerContent';
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
+import { SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
+import { colors, fonts } from './src/theme';
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
 
 const theme = {
   ...DefaultTheme,
-  colors: { ...DefaultTheme.colors, background: '#0e0f12', card: '#16181d', text: '#fff', border: '#2a2e37', primary: '#D92906' },
+  colors: { ...DefaultTheme.colors, background: colors.bg, card: colors.surface, text: colors.text, border: colors.border, primary: colors.accent },
 };
 
 function MainDrawer() {
@@ -28,11 +32,13 @@ function MainDrawer() {
       initialRouteName="Dashboard"
       drawerContent={(props) => <AppDrawerContent {...props} />}
       screenOptions={{
-        headerStyle: { backgroundColor: '#16181d' },
-        headerTintColor: '#fff',
-        drawerStyle: { backgroundColor: '#16181d' },
-        drawerActiveTintColor: '#D92906',
-        drawerInactiveTintColor: '#e8eaed',
+        headerStyle: { backgroundColor: colors.surface },
+        headerTitleStyle: { fontFamily: fonts.heading },
+        headerTintColor: colors.text,
+        drawerStyle: { backgroundColor: colors.surface },
+        drawerActiveTintColor: colors.accent,
+        drawerInactiveTintColor: colors.textBody,
+        drawerLabelStyle: { fontFamily: fonts.bodyMedium },
       }}
     >
       <Drawer.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Dashboard' }} />
@@ -53,6 +59,13 @@ export default function App() {
   // worker who's already signed in, and don't block a returning worker who's
   // offline behind a login call that can't possibly succeed.
   const [initialRoute, setInitialRoute] = useState(null);
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    SpaceGrotesk_600SemiBold,
+    SpaceGrotesk_700Bold,
+  });
 
   useEffect(() => {
     initDb().then(() => setDbReady(true)).catch((e) => console.error('DB init failed', e));
@@ -67,10 +80,10 @@ export default function App() {
     return unsub;
   }, []);
 
-  if (!dbReady || !initialRoute) {
+  if (!dbReady || !initialRoute || !fontsLoaded) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0e0f12', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#D92906" size="large" />
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={colors.accent} size="large" />
       </View>
     );
   }
@@ -80,9 +93,10 @@ export default function App() {
       <NavigationContainer theme={theme}>
         <Stack.Navigator
           initialRouteName={initialRoute}
-          screenOptions={{ headerStyle: { backgroundColor: '#16181d' }, headerTintColor: '#fff' }}
+          screenOptions={{ headerStyle: { backgroundColor: colors.surface }, headerTitleStyle: { fontFamily: fonts.heading }, headerTintColor: colors.text }}
         >
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Main" component={MainDrawer} options={{ headerShown: false }} />
         </Stack.Navigator>
       </NavigationContainer>

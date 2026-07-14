@@ -7,24 +7,25 @@ import { getPhotoCountsBySpot, getSyncSummaryByProject, getUploadSummary, getPho
 import * as osc from '../camera/oscClient';
 import { API_BASE_HOST } from '../api/client';
 import SyncStatusBar from '../components/SyncStatusBar';
+import { colors, fonts, radius } from '../theme';
 
 const NETWORK_CHECK_MS = 15000;
 const CAMERA_CHECK_MS = 15000;
 
 function progressColor(done, total) {
-    if (!total) return '#2a2e37';
-    if (done === 0) return '#D92906';
-    if (done < total) return '#e3b341';
-    return '#4fae5e';
+    if (!total) return colors.border;
+    if (done === 0) return colors.accent;
+    if (done < total) return colors.warning;
+    return colors.success;
 }
 
 function networkQuality(net) {
-    if (!net.isConnected) return { label: 'Offline', color: '#D92906' };
-    if (net.checking) return { label: 'Checking…', color: '#9aa0aa' };
-    if (!net.reachable) return { label: `${net.type} · server unreachable`, color: '#e3b341' };
-    if (net.latencyMs < 300) return { label: `${net.type} · Good · ${net.latencyMs}ms`, color: '#4fae5e' };
-    if (net.latencyMs < 1000) return { label: `${net.type} · Fair · ${net.latencyMs}ms`, color: '#e3b341' };
-    return { label: `${net.type} · Slow · ${net.latencyMs}ms`, color: '#D92906' };
+    if (!net.isConnected) return { label: 'Offline', color: colors.accent };
+    if (net.checking) return { label: 'Checking…', color: colors.textMuted };
+    if (!net.reachable) return { label: `${net.type} · server unreachable`, color: colors.warning };
+    if (net.latencyMs < 300) return { label: `${net.type} · Good · ${net.latencyMs}ms`, color: colors.success };
+    if (net.latencyMs < 1000) return { label: `${net.type} · Fair · ${net.latencyMs}ms`, color: colors.warning };
+    return { label: `${net.type} · Slow · ${net.latencyMs}ms`, color: colors.accent };
 }
 
 export default function DashboardScreen() {
@@ -144,7 +145,7 @@ export default function DashboardScreen() {
                                 </View>
                                 <View style={styles.kpi}>
                                     <Text style={styles.kpiLabel}>Camera</Text>
-                                    <Text style={[styles.kpiValue, { color: cameraConnected ? '#4fae5e' : cameraConnected === false ? '#D92906' : '#9aa0aa' }]}>
+                                    <Text style={[styles.kpiValue, { color: cameraConnected ? colors.success : cameraConnected === false ? colors.accent : colors.textMuted }]}>
                                         {cameraConnected === null ? 'Checking…' : cameraConnected ? 'Connected' : 'Not connected'}
                                     </Text>
                                 </View>
@@ -158,10 +159,10 @@ export default function DashboardScreen() {
                             <View style={styles.card}>
                                 <Text style={styles.cardLabel}>Uploads by status ({totalCaptured} total captured)</Text>
                                 <View style={styles.statusRow}>
-                                    <StatusPill label="Pending" count={globalSummary.pending} color="#D92906" />
-                                    <StatusPill label="Uploading" count={globalSummary.uploading} color="#e3b341" />
-                                    <StatusPill label="Done" count={globalSummary.done} color="#4fae5e" />
-                                    <StatusPill label="Failed" count={globalSummary.failed} color="#9aa0aa" />
+                                    <StatusPill label="Pending" count={globalSummary.pending} color={colors.accent} />
+                                    <StatusPill label="Uploading" count={globalSummary.uploading} color={colors.warning} />
+                                    <StatusPill label="Done" count={globalSummary.done} color={colors.success} />
+                                    <StatusPill label="Failed" count={globalSummary.failed} color={colors.textMuted} />
                                 </View>
                             </View>
 
@@ -245,44 +246,44 @@ function StatusPill({ label, count, color }) {
 }
 
 function StatusDot({ status }) {
-    const color = status === 'done' ? '#4fae5e' : status === 'failed' ? '#D92906' : status === 'uploading' ? '#e3b341' : '#9aa0aa';
+    const color = status === 'done' ? colors.success : status === 'failed' ? colors.accent : status === 'uploading' ? colors.warning : colors.textMuted;
     return <Text style={{ color }}>●</Text>;
 }
 
 const styles = StyleSheet.create({
-    c: { flex: 1, backgroundColor: '#0e0f12', padding: 16 },
+    c: { flex: 1, backgroundColor: colors.bg, padding: 16 },
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    h: { color: '#fff', fontSize: 22, fontWeight: '700' },
-    refreshBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#D92906' },
-    refreshBtnT: { color: '#fff', fontSize: 12, fontWeight: '600' },
+    h: { color: colors.text, fontSize: 22, fontWeight: '700', fontFamily: fonts.headingBold, letterSpacing: -0.4 },
+    refreshBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.button, borderWidth: 1, borderColor: colors.accent },
+    refreshBtnT: { color: colors.accent, fontSize: 12, fontWeight: '600', fontFamily: fonts.bodySemiBold },
     kpiRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-    kpi: { flex: 1, backgroundColor: '#16181d', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#2a2e37' },
-    kpiLabel: { color: '#9aa0aa', fontSize: 12, marginBottom: 4 },
-    kpiValue: { color: '#fff', fontSize: 16, fontWeight: '700' },
-    card: { backgroundColor: '#16181d', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#2a2e37', marginBottom: 12 },
-    cardLabel: { color: '#9aa0aa', fontSize: 12, marginBottom: 6 },
-    netText: { fontSize: 14, fontWeight: '700' },
+    kpi: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+    kpiLabel: { color: colors.textMuted, fontSize: 12, marginBottom: 4, fontFamily: fonts.body },
+    kpiValue: { color: colors.text, fontSize: 16, fontWeight: '700', fontFamily: fonts.heading },
+    card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+    cardLabel: { color: colors.textMuted, fontSize: 12, marginBottom: 6, fontFamily: fonts.body },
+    netText: { fontSize: 14, fontWeight: '700', fontFamily: fonts.bodySemiBold },
     statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 },
     pill: { flexDirection: 'row', alignItems: 'center' },
     pillDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-    pillT: { color: '#e8eaed', fontSize: 12 },
-    sectionH: { color: '#fff', fontWeight: '700', marginBottom: 8, marginTop: 4 },
-    projectCard: { backgroundColor: '#16181d', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#2a2e37', marginBottom: 10 },
-    projectName: { color: '#fff', fontSize: 15, fontWeight: '700' },
-    projectMeta: { color: '#9aa0aa', fontSize: 12, marginTop: 4 },
-    barTrack: { height: 6, backgroundColor: '#2a2e37', borderRadius: 3, marginTop: 8, overflow: 'hidden' },
+    pillT: { color: colors.textBody, fontSize: 12, fontFamily: fonts.body },
+    sectionH: { color: colors.text, fontWeight: '700', marginBottom: 8, marginTop: 4, fontFamily: fonts.heading },
+    projectCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+    projectName: { color: colors.text, fontSize: 15, fontWeight: '700', fontFamily: fonts.heading },
+    projectMeta: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontFamily: fonts.body },
+    barTrack: { height: 6, backgroundColor: colors.border, borderRadius: 3, marginTop: 8, overflow: 'hidden' },
     barFill: { height: '100%', borderRadius: 3 },
-    viewBtn: { marginTop: 10, alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#2a2e37' },
-    viewBtnT: { color: '#e8eaed', fontSize: 12, fontWeight: '600' },
-    modalC: { flex: 1, backgroundColor: '#0e0f12' },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#2a2e37' },
-    modalTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
-    modalClose: { color: '#D92906', fontWeight: '700' },
-    photoRow: { flexDirection: 'row', backgroundColor: '#16181d', borderRadius: 8, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: '#2a2e37' },
-    thumb: { width: 56, height: 56, borderRadius: 6, marginRight: 10, backgroundColor: '#2a2e37' },
-    photoStatus: { color: '#e8eaed', fontSize: 12, marginBottom: 4 },
-    photoPath: { color: '#6a707b', fontSize: 10 },
+    viewBtn: { marginTop: 10, alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.button, borderWidth: 1, borderColor: colors.border },
+    viewBtnT: { color: colors.textBody, fontSize: 12, fontWeight: '600', fontFamily: fonts.bodySemiBold },
+    modalC: { flex: 1, backgroundColor: colors.bg },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+    modalTitle: { color: colors.text, fontSize: 18, fontWeight: '700', fontFamily: fonts.heading },
+    modalClose: { color: colors.accent, fontWeight: '700', fontFamily: fonts.bodySemiBold },
+    photoRow: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: radius.button, padding: 10, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+    thumb: { width: 56, height: 56, borderRadius: 6, marginRight: 10, backgroundColor: colors.border },
+    photoStatus: { color: colors.textBody, fontSize: 12, marginBottom: 4, fontFamily: fonts.body },
+    photoPath: { color: colors.textMuted, fontSize: 10, fontFamily: fonts.body },
     viewerC: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
     viewerImg: { width: '100%', height: '100%' },
-    viewerClose: { position: 'absolute', top: 48, right: 20, zIndex: 1, backgroundColor: 'rgba(22,24,29,.85)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+    viewerClose: { position: 'absolute', top: 48, right: 20, zIndex: 1, backgroundColor: 'rgba(17,17,17,.85)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.button },
 });

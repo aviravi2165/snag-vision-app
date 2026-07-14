@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { onSyncProgress, getQueueSummary } from '../sync/syncEngine';
+import { colors, fonts, radius } from '../theme';
 
 // The global "sync everything" button used to live here. Now that every
 // project has its own scoped Sync button (uploads only that project's
@@ -42,7 +43,7 @@ export default function SyncStatusBar() {
 }
 
 const styles = StyleSheet.create({
-    bar: { backgroundColor: '#16181d', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#2a2e37', marginBottom: 16 },
-    text: { color: '#fff', fontWeight: '700' },
-    sub: { color: '#9aa0aa', fontSize: 12, marginTop: 4 },
+    bar: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+    text: { color: colors.text, fontWeight: '700', fontFamily: fonts.heading },
+    sub: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontFamily: fonts.body },
 });
