@@ -42,12 +42,12 @@ export async function getUploadSummary() {
   all.forEach((p) => { counts[p.status] = (counts[p.status] || 0) + 1; });
   return Object.entries(counts).map(([status, count]) => ({ status, count }));
 }
-export async function getPhotoCountsBySpot() {
+export async function getPhotoCountsBySpot() { 
   const all = await allPhotos();
   const map = {};
   all.forEach((p) => { map[p.spotId] = (map[p.spotId] || 0) + 1; });
   return map;
-}
+} 
 
 export async function getPhotosForProject(projectId) {
   const all = (await allPhotos()).filter((p) => p.projectId === projectId);
