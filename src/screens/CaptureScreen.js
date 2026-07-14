@@ -79,7 +79,7 @@ export default function CaptureScreen({ route, navigation }) {
 
   useEffect(() => {
     if (!projectId) return;
-    const hasSpots = (rawFloors) => (rawFloors || []).some((f) => (f.rooms || []).some((r) => (r.spots || []).length > 0));
+    const hasFloors = (rawFloors) => (rawFloors || []).length > 0;
     const load = async (rawFloors) => {
       const localized = await Promise.all(rawFloors.map(ensureLocalPlanImage));
       setFloors(localized);
@@ -87,12 +87,14 @@ export default function CaptureScreen({ route, navigation }) {
     };
     const useCacheOrEmpty = async () => {
       const cached = await cacheGet(`cache:structure:${projectId}`);
-      if (hasSpots(cached)) load(cached); else setFloors([]);
+      if (hasFloors(cached)) load(cached); else setFloors([]);
     };
     api.get(`/projects/${projectId}/structure`)
-      // A live response with no spots is as useless as no response — fall
-      // back rather than leaving the plan viewer with nothing to click.
-      .then((r) => (hasSpots(r.data) ? load(r.data) : useCacheOrEmpty()))
+      // A live response with floors is always worth showing, even before any
+      // spot has been added yet (e.g. right after a floor's plan image was
+      // first set up) — only fall back to cache if the server has no floors
+      // at all for this project.
+      .then((r) => (hasFloors(r.data) ? load(r.data) : useCacheOrEmpty()))
       .catch(useCacheOrEmpty);
   }, [projectId]);
 
