@@ -37,7 +37,7 @@ export default function PlanPicker({
   const [imgState, setImgState] = useState('loading'); // loading | loaded | error
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const pinSize = winW < 380 ? 14 : 17;
+  const pinSize = winW < 380 ? 6 : 9;
 
   const box = { w: viewport.w * zoom, h: viewport.h * zoom };
   const maxPan = { x: Math.max(0, box.w - viewport.w), y: Math.max(0, box.h - viewport.h) };
@@ -111,7 +111,7 @@ export default function PlanPicker({
             {flatSpots.map((s) => {
               const active = s.SpotId === activeSpotId;
               const count = counts[s.SpotId] || 0;
-              const size = active ? pinSize + 4 : pinSize;
+              const size = active ? pinSize + 2 : pinSize ;
               return (
                 <TouchableOpacity
                   key={s.SpotId}
@@ -121,7 +121,7 @@ export default function PlanPicker({
                   style={[styles.pin, {
                     left: s.CoordinateX * box.w - size / 2, top: s.CoordinateY * box.h - size / 2,
                     backgroundColor: editMode ? colors.textMuted : colorForSpot(count, active),
-                    borderColor: active ? '#fff' : 'rgba(255,255,255,0.7)',
+                    borderColor: active ? '#fff' : 'rgba(10, 6, 6, 0.7)',
                     width: size, height: size, borderRadius: size / 2,
                   }]}
                 >
