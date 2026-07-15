@@ -18,25 +18,41 @@ export function onSyncProgress(cb) {
 }
 function notify(event) { listeners.forEach((l) => l(event)); }
 
-async function uploadOne(photo) {
+// createUploadTask (not the simpler uploadAsync) so we get a real per-photo
+// progress callback instead of just "photo N of M" — matters most on the
+// slow/flaky office WiFi this app is built for. Same multipart transport,
+// same idempotent parameters, just observable mid-flight now.
+async function uploadOne(photo, onProgress) {
     const token = await AsyncStorage.getItem('sv_token');
-    const result = await FileSystem.uploadAsync(`${API_BASE}/uploads/photo`, photo.localUri, {
-        httpMethod: 'POST',
-        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-        fieldName: 'image',
-        headers: { Authorization: `Bearer ${token}` },
-        // photoId doubles as the idempotency key — if this exact upload already
-        // landed on a previous attempt, the backend should return the existing
-        // record instead of creating a duplicate.
-        parameters: {
-            photoId: photo.id,
-            projectId: photo.projectId,
-            roomId: photo.roomId,
-            spotId: photo.spotId,
-            checksum: photo.checksum || '',
+    const task = FileSystem.createUploadTask(
+        `${API_BASE}/uploads/photo`,
+        photo.localUri,
+        {
+            httpMethod: 'POST',
+            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+            fieldName: 'image',
+            headers: { Authorization: `Bearer ${token}` },
+            // photoId doubles as the idempotency key — if this exact upload
+            // already landed on a previous attempt, the backend should
+            // return the existing record instead of creating a duplicate.
+            parameters: {
+                photoId: photo.id,
+                projectId: photo.projectId,
+                roomId: photo.roomId,
+                spotId: photo.spotId,
+                checksum: photo.checksum || '',
+            },
         },
-    });
-    if (result.status < 200 || result.status >= 300) throw new Error(`Upload failed (${result.status})`);
+        (data) => {
+            if (onProgress && data.totalBytesExpectedToSend > 0) {
+                onProgress(data.totalBytesSent / data.totalBytesExpectedToSend);
+            }
+        }
+    );
+    const result = await task.uploadAsync();
+    if (!result || result.status < 200 || result.status >= 300) {
+        throw new Error(`Upload failed (${result?.status ?? 'no response'})`);
+    }
     return JSON.parse(result.body || '{}');
 }
 
@@ -164,9 +180,11 @@ export async function runSync(projectId) {
             if (!still.isConnected) { notify({ type: 'offline-mid-sync', projectId }); break; }
 
             await markUploading(photo.id);
-            notify({ type: 'progress', done, failed, total: toUpload.length, projectId });
+            notify({ type: 'progress', done, failed, total: toUpload.length, projectId, photoPct: 0 });
             try {
-                const result = await uploadOne(photo);
+                const result = await uploadOne(photo, (pct) => {
+                    notify({ type: 'progress', done, failed, total: toUpload.length, projectId, photoPct: pct });
+                });
                 await markDone(photo.id, result.id || 'ok');
                 items.push({ kind: 'photo', localId: photo.id, remoteId: result.id, status: 'done' });
                 done += 1;

@@ -32,6 +32,9 @@ export default function ManageSpotsScreen({ route }) {
   const [floors, setFloors] = useState([]);
   const [floorIdx, setFloorIdx] = useState(0);
   const [floorPickerOpen, setFloorPickerOpen] = useState(false);
+  const [roomIdx, setRoomIdx] = useState(0);
+  const [roomPickerOpen, setRoomPickerOpen] = useState(false);
+  const [addRoomOpen, setAddRoomOpen] = useState(false);
   const [mergedFloor, setMergedFloor] = useState(null);
 
   const [loading, setLoading] = useState(true);
@@ -108,6 +111,10 @@ export default function ManageSpotsScreen({ route }) {
 
   const floor = floors[floorIdx];
 
+  // A different floor almost certainly has different rooms — don't carry
+  // over an index that might now point at the wrong one (or nothing).
+  useEffect(() => { setRoomIdx(0); }, [floor?.FloorId]);
+
   const refreshMerged = useCallback(async () => {
     if (!floor || !projectId) { setMergedFloor(null); return; }
     setMergedFloor(await getMergedSpotsForFloor(floor, projectId));
@@ -115,8 +122,9 @@ export default function ManageSpotsScreen({ route }) {
 
   useFocusEffect(useCallback(() => { refreshMerged(); }, [refreshMerged]));
 
-  const room = mergedFloor?.rooms?.[0];
-  const allSpots = mergedFloor?.rooms?.flatMap((r) => r.spots || []) || [];
+  const rooms = mergedFloor?.rooms || [];
+  const room = rooms[roomIdx] || rooms[0];
+  const allSpots = rooms.flatMap((r) => r.spots || []);
   const pendingCount = allSpots.filter((s) => s._pendingSync).length;
 
   const createRoom = async () => {
@@ -125,6 +133,7 @@ export default function ManageSpotsScreen({ route }) {
     try {
       await webApi.post(`/projects/floors/${floor.FloorId}/rooms`, { name: roomNameInput.trim() });
       setRoomNameInput('');
+      setAddRoomOpen(false);
       await loadStructure();
     } catch (e) {
       Alert.alert('Could not create room', e.response?.data?.detail || e.message || 'Room creation needs a live connection.');
@@ -267,9 +276,20 @@ export default function ManageSpotsScreen({ route }) {
       ) : (
         <View style={styles.card}>
           <View style={styles.rowBetween}>
-            <Text style={styles.cardTitle}>{room.RoomName}</Text>
+            <TouchableOpacity
+              style={styles.roomSelect}
+              onPress={() => setRoomPickerOpen(true)}
+              disabled={rooms.length < 2}
+            >
+              <Text style={styles.cardTitle}>{room.RoomName}{rooms.length > 1 ? '  ▾' : ''}</Text>
+            </TouchableOpacity>
             {busy && <ActivityIndicator color={colors.accent} size="small" />}
           </View>
+          {canEdit && (
+            <TouchableOpacity onPress={() => setAddRoomOpen(true)} style={{ marginBottom: 10 }}>
+              <Text style={styles.switchLink}>+ Add another room</Text>
+            </TouchableOpacity>
+          )}
           {!canEdit && role && (
             <View style={styles.permNotice}>
               <Text style={styles.permNoticeT}>View only — only admins and project managers can add or remove spots.</Text>
@@ -277,16 +297,17 @@ export default function ManageSpotsScreen({ route }) {
           )}
           <PlanPicker
             planUrl={floor?.FloorPlanImageUrl}
-            rooms={mergedFloor?.rooms || []}
+            rooms={rooms}
             editMode={canEdit}
             onAddPoint={handleAddPoint}
             onDeleteSpot={handleDeleteSpot}
           />
-          <Text style={styles.count}>{room.spots?.length || 0} spot(s) on this floor</Text>
+          <Text style={styles.count}>Adding new spots to: {room.RoomName}</Text>
 
-          {room.spots?.length > 0 && (
-            <View style={styles.spotList}>
-              {room.spots.map((s) => (
+          {rooms.map((r) => (r.spots || []).length > 0 && (
+            <View key={r.RoomId} style={styles.spotList}>
+              {rooms.length > 1 && <Text style={styles.spotListHeader}>{r.RoomName}</Text>}
+              {r.spots.map((s) => (
                 <View key={s.SpotId} style={styles.spotRow}>
                   <Text style={styles.spotRowT} numberOfLines={1}>
                     {s.SortOrder}. {s.SpotName}{s._pendingSync ? ' · pending sync' : ''}
@@ -299,9 +320,44 @@ export default function ManageSpotsScreen({ route }) {
                 </View>
               ))}
             </View>
-          )}
+          ))}
         </View>
       )}
+
+      <Modal visible={roomPickerOpen} transparent animationType="fade" onRequestClose={() => setRoomPickerOpen(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setRoomPickerOpen(false)}>
+          <View style={styles.modalCard}>
+            <FlatList
+              data={rooms}
+              keyExtractor={(r) => r.RoomId}
+              renderItem={({ item, index }) => (
+                <TouchableOpacity style={[styles.modalRow, index === roomIdx && styles.modalRowActive]} onPress={() => { setRoomIdx(index); setRoomPickerOpen(false); }}>
+                  <Text style={styles.modalRowT}>{item.RoomName}</Text>
+                  <Text style={styles.modalRowSub}>{(item.spots || []).length} spot(s)</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={addRoomOpen} transparent animationType="fade" onRequestClose={() => setAddRoomOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.addCard}>
+            <Text style={styles.cardTitle}>New room on {floor?.FloorName}</Text>
+            <Text style={styles.cardSub}>This step needs a live connection.</Text>
+            <TextInput style={styles.input} value={roomNameInput} onChangeText={setRoomNameInput} autoFocus placeholder="e.g. Hallway" placeholderTextColor={colors.placeholder} />
+            <View style={styles.rowGap}>
+              <TouchableOpacity style={[styles.btn, styles.btnGhost, { flex: 1 }]} onPress={() => { setAddRoomOpen(false); setRoomNameInput(''); }}>
+                <Text style={styles.btnGhostText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, { flex: 1 }, busy && { opacity: 0.6 }]} onPress={createRoom} disabled={busy}>
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Create room</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={!!pendingPoint} transparent animationType="fade" onRequestClose={() => setPendingPoint(null)}>
         <View style={styles.modalOverlay}>
@@ -338,15 +394,18 @@ const styles = StyleSheet.create({
   modalRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
   modalRowActive: { backgroundColor: colors.accentLight },
   modalRowT: { color: colors.text, fontWeight: '600', fontFamily: fonts.bodySemiBold },
+  modalRowSub: { color: colors.textMuted, fontSize: 11, marginTop: 2, fontFamily: fonts.body },
   card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15, fontFamily: fonts.heading },
   cardSub: { color: colors.textMuted, fontSize: 12, marginTop: 4, marginBottom: 12, fontFamily: fonts.body },
+  roomSelect: { flexShrink: 1 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   rowGap: { flexDirection: 'row', gap: 10, marginTop: 4 },
   count: { color: colors.textMuted, fontSize: 12, marginTop: 10, fontFamily: fonts.body },
   permNotice: { backgroundColor: colors.infoBg, borderRadius: radius.button, padding: 10, marginBottom: 10 },
   permNoticeT: { color: colors.info, fontSize: 12, fontFamily: fonts.bodyMedium },
   spotList: { marginTop: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6 },
+  spotListHeader: { color: colors.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, marginTop: 6, fontFamily: fonts.bodySemiBold },
   spotRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
   spotRowT: { color: colors.textBody, fontSize: 13, flex: 1, marginRight: 10, fontFamily: fonts.body },
   spotDeleteBtn: { width: 22, height: 22, borderRadius: 5, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
