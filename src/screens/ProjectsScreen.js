@@ -152,7 +152,7 @@ function ProjectRow({ project, onOpen }) {
   return (
     <TouchableOpacity style={styles.card} onPress={() => onOpen(project)}>
       <Text style={styles.name}>{project.Name}</Text>
-      <Text style={styles.meta}>{project.Folder} · {project.City} · {project.FloorCount} floors</Text>
+      <Text style={styles.meta}>{project.Folder} · {project.City} · No. of floors - {project.FloorCount} </Text>
       <Text style={styles.meta}>
         {completion ? `${completion.done}/${completion.total} spots captured` : 'Open once to load its floor plan'}
       </Text>
