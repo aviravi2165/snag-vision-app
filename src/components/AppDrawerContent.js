@@ -16,7 +16,7 @@ export default function AppDrawerContent(props) {
         text: 'Sign out',
         style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.multiRemove(['sv_token', 'sv_project', 'sv_role']);
+          await AsyncStorage.multiRemove(['sv_token', 'sv_project', 'sv_role', 'sv_name', 'sv_email']);
           // Reset the ROOT stack (Login/Main), not just the drawer, so the
           // back button can never return to an authenticated screen.
           props.navigation.getParent()?.dispatch(
@@ -39,6 +39,9 @@ export default function AppDrawerContent(props) {
         </View>
       </DrawerContentScrollView>
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+        <TouchableOpacity style={styles.accountBtn} onPress={() => props.navigation.navigate('AccountDetails')}>
+          <Text style={styles.accountText}>Account Details</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
           <Text style={styles.logoutText}>Sign out</Text>
         </TouchableOpacity>
@@ -53,6 +56,8 @@ const styles = StyleSheet.create({
   sub: { color: colors.textMuted, fontSize: 12, marginTop: 2, fontFamily: fonts.body },
   items: { paddingHorizontal: 8 },
   footer: { borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 16, paddingTop: 12 },
+  accountBtn: { paddingVertical: 12, borderRadius: radius.button, alignItems: 'center', marginBottom: 8 },
+  accountText: { color: colors.textBody, fontWeight: '600', fontFamily: fonts.bodySemiBold },
   logoutBtn: { paddingVertical: 12, borderRadius: radius.button, borderWidth: 1, borderColor: colors.accent, alignItems: 'center' },
   logoutText: { color: colors.accent, fontWeight: '700', fontFamily: fonts.bodySemiBold },
 });

@@ -2,6 +2,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 // Fixed by the camera itself once your phone joins its WiFi AP — same for all X-series.
+// const CAMERA_BASE = 'https://fake-theta.vercel.app';
 const CAMERA_BASE = 'http://192.168.42.1';
 
 async function post(path, body) {
@@ -33,19 +34,29 @@ export async function prepareImageMode() {
     });
 }
 
+// The standard single-shot camera.takePicture command returns the file at
+// results.fileUrl (confirmed against Ricoh's own OSC simulator); _fileGroup
+// is used by other commands (e.g. bracket/interval shooting), not this one —
+// checking both is a safe, cheap hedge against firmware/model differences.
+function extractFileUrl(results) {
+    const url = results?.fileUrl || results?._fileGroup?.[0];
+    if (!url) throw new Error('Camera response had no file URL');
+    return url;
+}
+
 // Fires the shutter, polls camera until the stitched photo is ready,
 // returns the camera-hosted file URL (NOT local yet — see downloadToLocal).
 export async function takePicture({ pollMs = 1000, timeoutMs = 20000 } = {}) {
     const exec = await post('/osc/commands/execute', { name: 'camera.takePicture' });
     if (exec.state === 'error') throw new Error(exec.error?.message || 'Camera error');
-    if (exec.state === 'done') return exec.results._fileGroup[0];
+    if (exec.state === 'done') return extractFileUrl(exec.results);
 
     const id = exec.id;
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
         await new Promise((r) => setTimeout(r, pollMs));
         const status = await post('/osc/commands/status', { id });
-        if (status.state === 'done') return status.results._fileGroup[0];
+        if (status.state === 'done') return extractFileUrl(status.results);
         if (status.state === 'error') throw new Error(status.error?.message || 'Capture failed');
     }
     throw new Error('Capture timed out — camera may be busy or out of range');

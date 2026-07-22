@@ -187,10 +187,38 @@ export default function ManageSpotsScreen({ route }) {
     ]);
   };
 
+  // Always mounted regardless of projectId/loading state below, so the
+  // picker is reachable even before any project has ever been selected on
+  // this device — previously this Modal only rendered inside the main
+  // content branch, which required a project to already be picked to even
+  // reach the button that opens it. A dead end for a first-time visitor.
+  const projectPickerModal = (
+    <Modal visible={projectPickerOpen} transparent animationType="fade" onRequestClose={() => setProjectPickerOpen(false)}>
+      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setProjectPickerOpen(false)}>
+        <View style={styles.modalCard}>
+          <FlatList
+            data={projects}
+            keyExtractor={(p) => p.ProjectId}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={[styles.modalRow, item.ProjectId === projectId && styles.modalRowActive]} onPress={() => selectProject(item)}>
+                <Text style={styles.modalRowT}>{item.Name}</Text>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={<Text style={[styles.modalRowT, { padding: 16 }]}>No cached projects yet — open Projects once while online.</Text>}
+          />
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   if (!projectId) {
     return (
       <View style={styles.center}>
-        <Text style={styles.cardSub}>Open a project from the Projects screen first.</Text>
+        {projectPickerModal}
+        <Text style={styles.cardSub}>Select a project to manage its spots.</Text>
+        <TouchableOpacity style={[styles.btn, { marginTop: 14, paddingHorizontal: 28 }]} onPress={() => setProjectPickerOpen(true)}>
+          <Text style={styles.btnText}>Select Project ▾</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -198,6 +226,7 @@ export default function ManageSpotsScreen({ route }) {
   if (loading) {
     return (
       <View style={styles.center}>
+        {projectPickerModal}
         <ActivityIndicator color={colors.accent} size="large" />
       </View>
     );
@@ -205,6 +234,7 @@ export default function ManageSpotsScreen({ route }) {
 
   return (
     <ScrollView style={styles.c}>
+      {projectPickerModal}
       <TouchableOpacity style={styles.projectRow} onPress={() => setProjectPickerOpen(true)}>
         <Text style={styles.h}>{projectName}</Text>
         <Text style={styles.switchLink}>Switch project ▾</Text>
@@ -213,22 +243,6 @@ export default function ManageSpotsScreen({ route }) {
         {allSpots.length} spot(s){pendingCount > 0 ? ` · ${pendingCount} pending sync` : ''} on this floor
         {offlineNotice ? ' · showing cached data, offline' : ''}
       </Text>
-
-      <Modal visible={projectPickerOpen} transparent animationType="fade" onRequestClose={() => setProjectPickerOpen(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setProjectPickerOpen(false)}>
-          <View style={styles.modalCard}>
-            <FlatList
-              data={projects}
-              keyExtractor={(p) => p.ProjectId}
-              renderItem={({ item }) => (
-                <TouchableOpacity style={[styles.modalRow, item.ProjectId === projectId && styles.modalRowActive]} onPress={() => selectProject(item)}>
-                  <Text style={styles.modalRowT}>{item.Name}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {floors.length > 0 && (
         <TouchableOpacity style={styles.floorSelect} onPress={() => setFloorPickerOpen(true)} disabled={floors.length < 2}>

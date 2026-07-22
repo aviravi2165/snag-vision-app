@@ -5,8 +5,8 @@ import api from '../api/client';
 import { colors, fonts, radius } from '../theme';
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('field@snagvision.io');
-  const [password, setPassword] = useState('Password@123');
+  const [email, setEmail] = useState('yashq@gmail.com');
+  const [password, setPassword] = useState('password');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -18,6 +18,8 @@ export default function LoginScreen({ navigation }) {
       await AsyncStorage.multiSet([
         ['sv_token', r.data.token],
         ['sv_role', r.data.user.role],
+        ['sv_name', r.data.user.name || ''],
+        ['sv_email', r.data.user.email || ''],
       ]);
       navigation.replace('Main');
     } catch (e) {
