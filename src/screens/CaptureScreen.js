@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Modal, FlatList } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import uuid from 'react-native-uuid';
+import * as FileSystem from 'expo-file-system/legacy';
 import api from '../api/client';
 import * as osc from '../camera/oscClient';
 import { insertPhoto, getPhotosForSpot, getPhotoCountsBySpot, getMergedSpotsForFloor } from '../db/localStore';
@@ -67,7 +68,10 @@ export default function CaptureScreen({ route, navigation }) {
         localUri,
         checksum,
       });
-      setSpotCount((c) => c + 1);
+      // A capture always replaces whatever was there before for this spot
+      // (see localStore.insertPhoto), so the count is always exactly 1 now
+      // -- not the previous count plus one.
+      setSpotCount(1);
       await refreshSpotCounts();
       setStatus('Saved to local queue');
     } catch (e) {
@@ -156,7 +160,7 @@ export default function CaptureScreen({ route, navigation }) {
       const photoId = uuid.v4();
       const tempDest = `${photoId}.jpg`;
       setStatus('Transferring photo…');
-      const localTempUri = await osc.downloadToLocal(fileUrl, `${require('expo-file-system').cacheDirectory}${tempDest}`);
+      const localTempUri = await osc.downloadToLocal(fileUrl, `${FileSystem.cacheDirectory}${tempDest}`);
       const { localUri, checksum } = await savePhotoLocally(localTempUri, photoId);
 
       await insertPhoto({
@@ -168,7 +172,10 @@ export default function CaptureScreen({ route, navigation }) {
         checksum,
       });
 
-      setSpotCount((c) => c + 1);
+      // A capture always replaces whatever was there before for this spot
+      // (see localStore.insertPhoto), so the count is always exactly 1 now
+      // -- not the previous count plus one.
+      setSpotCount(1);
       await refreshSpotCounts();
       setStatus('Saved to device — will upload when you sync');
     } catch (e) {
@@ -236,13 +243,13 @@ export default function CaptureScreen({ route, navigation }) {
         </TouchableOpacity>
       ) : (
         <TouchableOpacity
-          style={[styles.btn, (!currentSpot || capturing) && { opacity: 0.5 }]}
+          style={[styles.btn, styles.btnConnected, (!currentSpot || capturing) && { opacity: 0.5 }]}
           disabled={!currentSpot || capturing}
           onPress={capturePhoto}
         >
           {capturing
             ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.btnText}>{currentSpot ? 'Capture' : 'Select a spot first'}</Text>}
+            : <Text style={styles.btnText}>{currentSpot ? 'Capture · Camera Connected' : 'Select a spot first'}</Text>}
         </TouchableOpacity>
 
       )}
@@ -279,6 +286,7 @@ const styles = StyleSheet.create({
   current: { color: colors.textMuted, marginTop: 10, fontFamily: fonts.body },
   row: { color: colors.textBody, marginBottom: 6, fontFamily: fonts.body },
   btn: { backgroundColor: colors.accent, padding: 16, borderRadius: radius.button, marginBottom: 12 },
+  btnConnected: { backgroundColor: colors.success },
   btnSecondary: { backgroundColor: colors.textMuted },
   btnText: { color: '#fff', textAlign: 'center', fontWeight: '700', fontFamily: fonts.bodySemiBold },
   note: { color: colors.textMuted, fontSize: 12, marginTop: 8, fontFamily: fonts.body },

@@ -7,6 +7,7 @@ import RegisterScreen from './src/screens/RegisterScreen';
 import ProjectsScreen from './src/screens/ProjectsScreen';
 import CaptureScreen from './src/screens/CaptureScreen';
 import ManageSpotsScreen from './src/screens/ManageSpotsScreen';
+import AccountDetailsScreen from './src/screens/AccountDetailsScreen';
 import { watchConnectivityAndAutoSync } from './src/sync/syncEngine';
 import { initDb } from './src/db/localStore';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -49,6 +50,11 @@ function MainDrawer() {
         options={{ title: 'Capture', drawerItemStyle: { display: 'none' } }}
       />
       <Drawer.Screen name="ManageSpots" component={ManageSpotsScreen} options={{ title: 'Manage Spots' }} />
+      <Drawer.Screen
+        name="AccountDetails"
+        component={AccountDetailsScreen}
+        options={{ title: 'Account Details', drawerItemStyle: { display: 'none' } }}
+      />
     </Drawer.Navigator>
   );
 }

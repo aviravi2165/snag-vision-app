@@ -1,6 +1,12 @@
 # dependencies
 node_modules/
 
+./mock-camera
+mock-camera
+
+./claude
+claude
+
 # Expo
 .expo/
 .expo-shared/

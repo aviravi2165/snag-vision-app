@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { deletePhotoLocally } from '../storage/fileStore';
 
 let db;
 
@@ -53,12 +54,24 @@ export async function initDb() {
     return db;
 }
 
+// Only one photo may exist locally per spot at a time — a recapture
+// replaces whatever was there before (deleting its file and row) rather
+// than adding another. This is local-only: if the old photo had already
+// synced, that upload stays on the server untouched (full history there),
+// this just governs what's queued/shown on the phone.
 export async function insertPhoto({ id, projectId, roomId, spotId, localUri, checksum }) {
-    await serialized(() => db.runAsync(
-        `INSERT INTO photos (id, projectId, roomId, spotId, localUri, checksum, capturedAt, status, attempts)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0)`,
-        [id, projectId, roomId, spotId, localUri, checksum, Date.now()]
-    ));
+    await serialized(async () => {
+        const existing = await db.getAllAsync(`SELECT * FROM photos WHERE spotId = ?`, [spotId]);
+        for (const old of existing) {
+            await deletePhotoLocally(old.localUri);
+        }
+        await db.runAsync(`DELETE FROM photos WHERE spotId = ?`, [spotId]);
+        await db.runAsync(
+            `INSERT INTO photos (id, projectId, roomId, spotId, localUri, checksum, capturedAt, status, attempts)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0)`,
+            [id, projectId, roomId, spotId, localUri, checksum, Date.now()]
+        );
+    });
 }
 
 export async function getPhotosForSpot(spotId) {

@@ -1,16 +1,24 @@
 import { get, set, keys, del } from 'idb-keyval';
+import { deletePhotoLocally } from '../storage/fileStore';
 
 const KEY_PREFIX = 'photo:';
 
 export async function initDb() { return true; }
 
-export async function insertPhoto(photo) {
-  await set(KEY_PREFIX + photo.id, { ...photo, status: 'pending', attempts: 0 });
-}
-
 async function allPhotos() {
   const allKeys = (await keys()).filter((k) => String(k).startsWith(KEY_PREFIX));
   return Promise.all(allKeys.map((k) => get(k)));
+}
+
+// Only one photo per spot locally at a time — see localStore.js for the
+// full rationale (native/SQLite version).
+export async function insertPhoto(photo) {
+  const existing = (await allPhotos()).filter((p) => p.spotId === photo.spotId);
+  await Promise.all(existing.map(async (p) => {
+    await deletePhotoLocally(p.localUri);
+    await del(KEY_PREFIX + p.id);
+  }));
+  await set(KEY_PREFIX + photo.id, { ...photo, status: 'pending', attempts: 0 });
 }
 
 export async function getPhotosForSpot(spotId) {

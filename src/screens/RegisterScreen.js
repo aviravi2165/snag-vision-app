@@ -32,6 +32,8 @@ export default function RegisterScreen({ navigation }) {
       await AsyncStorage.multiSet([
         ['sv_token', r.data.token],
         ['sv_role', r.data.user.role],
+        ['sv_name', r.data.user.name || ''],
+        ['sv_email', r.data.user.email || ''],
       ]);
       navigation.replace('Main');
     } catch (e) {

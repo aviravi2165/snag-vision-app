@@ -86,6 +86,11 @@ export default function ProjectsScreen({ navigation }) {
     navigation.navigate('Capture', { projectId: p.ProjectId, projectName: p.Name });
   };
 
+  const openManage = async (p) => {
+    await AsyncStorage.setItem('sv_project', p.ProjectId);
+    navigation.navigate('ManageSpots', { projectId: p.ProjectId, projectName: p.Name });
+  };
+
   return (
     <>
       <SyncStatusBar />
@@ -106,7 +111,7 @@ export default function ProjectsScreen({ navigation }) {
         <FlatList
           data={projects}
           keyExtractor={(p) => p.ProjectId}
-          renderItem={({ item }) => <ProjectRow project={item} onOpen={open} />}
+          renderItem={({ item }) => <ProjectRow project={item} onOpen={open} onManage={openManage} />}
           ListEmptyComponent={<Text style={styles.meta}>No projects yet — connect to the internet to load them.</Text>}
         />
       </View>
@@ -114,7 +119,7 @@ export default function ProjectsScreen({ navigation }) {
   );
 }
 
-function ProjectRow({ project, onOpen }) {
+function ProjectRow({ project, onOpen, onManage }) {
   const [summary, setSummary] = useState({ pending: 0, uploading: 0, done: 0, failed: 0 });
   const [completion, setCompletion] = useState(null);
   const [syncing, setSyncing] = useState(false);
@@ -158,13 +163,21 @@ function ProjectRow({ project, onOpen }) {
       </Text>
       <View style={styles.rowBottom}>
         <Text style={styles.meta}>{pendingTotal > 0 ? `${pendingTotal} photo(s) waiting` : 'Synced'}</Text>
-        <TouchableOpacity
-          style={[styles.syncBtn, (syncing || pendingTotal === 0) && { opacity: 0.5 }]}
-          disabled={syncing || pendingTotal === 0}
-          onPress={(e) => { e.stopPropagation?.(); runSync(project.ProjectId); }}
-        >
-          {syncing ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.syncBtnT}>Sync this project</Text>}
-        </TouchableOpacity>
+        <View style={styles.rowBtns}>
+          <TouchableOpacity
+            style={styles.manageBtn}
+            onPress={(e) => { e.stopPropagation?.(); onManage(project); }}
+          >
+            <Text style={styles.manageBtnT}>Manage Spots</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.syncBtn, (syncing || pendingTotal === 0) && { opacity: 0.5 }]}
+            disabled={syncing || pendingTotal === 0}
+            onPress={(e) => { e.stopPropagation?.(); runSync(project.ProjectId); }}
+          >
+            {syncing ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.syncBtnT}>Sync this project</Text>}
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -182,7 +195,10 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginTop: 12, marginBottom: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   name: { color: colors.text, fontSize: 16, fontWeight: '700', fontFamily: fonts.heading },
   meta: { color: colors.textMuted, marginTop: 4, fontFamily: fonts.body },
-  rowBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
+  rowBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, flexWrap: 'wrap', gap: 8 },
+  rowBtns: { flexDirection: 'row', gap: 8 },
+  manageBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.button, borderWidth: 1, borderColor: colors.accent },
+  manageBtnT: { color: colors.accent, fontSize: 12, fontWeight: '700', fontFamily: fonts.bodySemiBold },
   syncBtn: { backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.button },
   syncBtnT: { color: '#fff', fontSize: 12, fontWeight: '700', fontFamily: fonts.bodySemiBold },
 });
