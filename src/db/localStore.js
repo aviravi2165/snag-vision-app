@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import * as FileSystem from 'expo-file-system/legacy';
 import { deletePhotoLocally } from '../storage/fileStore';
 
 let db;
@@ -105,6 +106,13 @@ export async function markFailed(id, errorMsg) {
     ));
 }
 
+// Used only when a sync pass aborts for a reason that has nothing to do
+// with this specific photo (an expired session) — puts it back exactly
+// where it was, without counting it as a failed attempt.
+export async function resetPhotoToPending(id) {
+    await serialized(() => db.runAsync(`UPDATE photos SET status = 'pending' WHERE id = ?`, [id]));
+}
+
 export async function getUploadSummary() {
     return serialized(() => db.getAllAsync(
         `SELECT status, COUNT(*) as count FROM photos GROUP BY status`
@@ -116,6 +124,32 @@ export async function getPhotoCountsBySpot() {
   const map = {};
   rows.forEach((r) => { map[r.spotId] = r.count; });
   return map;
+}
+
+// Total on-device photo storage, split out by how much is already synced
+// (status 'done') and therefore safe to clear — the server copy is
+// untouched either way, this only ever deletes the local file + row.
+export async function getStorageStats() {
+    const rows = await serialized(() => db.getAllAsync(`SELECT * FROM photos`));
+    let totalBytes = 0, doneBytes = 0, doneCount = 0;
+    for (const row of rows) {
+        const info = await FileSystem.getInfoAsync(row.localUri);
+        const size = info.exists ? (info.size || 0) : 0;
+        totalBytes += size;
+        if (row.status === 'done') { doneBytes += size; doneCount += 1; }
+    }
+    return { totalCount: rows.length, totalBytes, doneCount, doneBytes };
+}
+
+export async function clearSyncedPhotoFiles() {
+    return serialized(async () => {
+        const rows = await db.getAllAsync(`SELECT * FROM photos WHERE status = 'done'`);
+        for (const row of rows) {
+            await deletePhotoLocally(row.localUri);
+        }
+        await db.runAsync(`DELETE FROM photos WHERE status = 'done'`);
+        return rows.length;
+    });
 }
 
 export async function getPhotosForProject(projectId) {
@@ -220,6 +254,13 @@ export async function getPendingDeleteSpots(projectId) {
 
 export async function markSpotSyncing(id) {
     await serialized(() => db.runAsync(`UPDATE spots SET syncStatus = 'syncing' WHERE id = ?`, [id]));
+}
+
+// Reverses markSpotSyncing when a sync pass aborts mid-flight (expired
+// session) — without this the row would be stuck in 'syncing', which
+// getPendingSyncSpots doesn't pick up, so it would never be retried.
+export async function markSpotQueued(id) {
+    await serialized(() => db.runAsync(`UPDATE spots SET syncStatus = 'pending' WHERE id = ?`, [id]));
 }
 
 export async function markSpotSynced(id, remoteId) {

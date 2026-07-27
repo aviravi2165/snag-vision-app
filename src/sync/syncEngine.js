@@ -2,12 +2,13 @@ import * as FileSystem from 'expo-file-system/legacy';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-    getPendingPhotos, markUploading, markDone, markFailed, getUploadSummary,
-    getPendingSyncSpots, getPendingDeleteSpots, markSpotSyncing, markSpotSynced,
+    getPendingPhotos, markUploading, markDone, markFailed, resetPhotoToPending, getUploadSummary,
+    getPendingSyncSpots, getPendingDeleteSpots, markSpotSyncing, markSpotQueued, markSpotSynced,
     markSpotSyncFailed, markSpotDeleteFailed, removeLocalSpot, reassignPhotosSpotId, pruneSyncedSpots,
 } from '../db/localStore';
 import api, { API_BASE } from '../api/client';
 import { cacheSet } from '../data/cache';
+import { clearSession } from '../auth/session';
 
 let isSyncing = false;
 let listeners = [];
@@ -51,9 +52,55 @@ async function uploadOne(photo, onProgress) {
     );
     const result = await task.uploadAsync();
     if (!result || result.status < 200 || result.status >= 300) {
-        throw new Error(`Upload failed (${result?.status ?? 'no response'})`);
+        const err = new Error(`Upload failed (${result?.status ?? 'no response'})`);
+        err.status = result?.status;
+        // This goes through a raw upload task, not axios, so client.js's
+        // response interceptor never sees it — do the same session cleanup
+        // here so an expired token behaves identically everywhere.
+        if (result?.status === 401) {
+            err.isAuthExpired = true;
+            await clearSession();
+        }
+        throw err;
     }
     return JSON.parse(result.body || '{}');
+}
+
+// A single flaky request (timeout, 502 from a waking-up server) shouldn't
+// cost a photo a full sync-pass retry cycle — retry it a couple times right
+// here first. 4xx responses are not retried: the request itself is wrong
+// (bad token, bad ids) and retrying identical input just wastes time.
+const MAX_ATTEMPTS_PER_SYNC = 3;
+const RETRY_DELAY_MS = [800, 1600];
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isRetryable(err) {
+    const status = err?.status;
+    if (status === undefined || status === null) return true; // no HTTP response at all — network/timeout
+    return status >= 500;
+}
+
+async function uploadWithRetry(photo, onProgress) {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return await uploadOne(photo, onProgress);
+        } catch (e) {
+            if (!isRetryable(e) || attempt >= MAX_ATTEMPTS_PER_SYNC - 1) throw e;
+            await delay(RETRY_DELAY_MS[attempt] || 1600);
+        }
+    }
+}
+
+// A photo whose status is 'failed' across this many separate sync PASSES
+// (not in-pass retries, see uploadWithRetry above) is treated as stuck —
+// surfaced distinctly in the UI instead of silently retrying forever.
+const STUCK_AFTER_ATTEMPTS = 3;
+
+export async function getFailedPhotosInfo() {
+    const pending = await getPendingPhotos();
+    const failed = pending.filter((p) => p.status === 'failed');
+    const stuck = failed.filter((p) => (p.attempts || 0) >= STUCK_AFTER_ATTEMPTS);
+    return { failedCount: failed.length, stuckCount: stuck.length };
 }
 
 // NOTE: POST /mobile/spots and DELETE /mobile/spots/{id} are the backend
@@ -91,6 +138,12 @@ async function syncSpotCreates(projectId, items) {
             items.push({ kind: 'spot', action: 'create', localId: row.id, remoteId, status: 'done' });
             done += 1;
         } catch (e) {
+            if (e.isAuthExpired) {
+                // Reverse the markSpotSyncing above so this row is picked up
+                // again next time, not stuck invisible in 'syncing' forever.
+                await markSpotQueued(row.id);
+                return { total: pendingCreates.length, done, failed, unsyncedIds, authExpired: true };
+            }
             await markSpotSyncFailed(row.id, e.message);
             items.push({ kind: 'spot', action: 'create', localId: row.id, status: 'failed', error: e.message });
             failed += 1;
@@ -111,6 +164,9 @@ async function syncSpotDeletes(projectId, items) {
             items.push({ kind: 'spot', action: 'delete', localId: row.id, remoteId: row.remoteId, status: 'done' });
             done += 1;
         } catch (e) {
+            if (e.isAuthExpired) {
+                return { total: pendingDeletes.length, done, failed, authExpired: true };
+            }
             if (e.response?.status === 404) {
                 // Already gone server-side — treat as a successful delete.
                 await removeLocalSpot(row.id);
@@ -147,7 +203,19 @@ export async function runSync(projectId) {
 
         if (projectId) {
             const createResult = await syncSpotCreates(projectId, items);
+            if (createResult.authExpired) {
+                notify({ type: 'auth-expired', projectId });
+                return { authExpired: true, spots: { total: createResult.total, done: createResult.done, failed: createResult.failed }, items };
+            }
             const deleteResult = await syncSpotDeletes(projectId, items);
+            if (deleteResult.authExpired) {
+                notify({ type: 'auth-expired', projectId });
+                return {
+                    authExpired: true,
+                    spots: { total: createResult.total + deleteResult.total, done: createResult.done + deleteResult.done, failed: createResult.failed + deleteResult.failed },
+                    items,
+                };
+            }
             spotsResult = {
                 total: createResult.total + deleteResult.total,
                 done: createResult.done + deleteResult.done,
@@ -182,13 +250,21 @@ export async function runSync(projectId) {
             await markUploading(photo.id);
             notify({ type: 'progress', done, failed, total: toUpload.length, projectId, photoPct: 0 });
             try {
-                const result = await uploadOne(photo, (pct) => {
+                const result = await uploadWithRetry(photo, (pct) => {
                     notify({ type: 'progress', done, failed, total: toUpload.length, projectId, photoPct: pct });
                 });
                 await markDone(photo.id, result.id || 'ok');
                 items.push({ kind: 'photo', localId: photo.id, remoteId: result.id, status: 'done' });
                 done += 1;
             } catch (e) {
+                if (e.isAuthExpired) {
+                    // Put it back exactly where it was — this has nothing to
+                    // do with the photo itself, so it shouldn't count as a
+                    // failed attempt or need a stuck-photo retry.
+                    await resetPhotoToPending(photo.id);
+                    notify({ type: 'auth-expired', projectId });
+                    return { authExpired: true, spots: spotsResult, photos: { total: toUpload.length, done, failed }, items };
+                }
                 await markFailed(photo.id, e.message);
                 items.push({ kind: 'photo', localId: photo.id, status: 'failed', error: e.message });
                 failed += 1;

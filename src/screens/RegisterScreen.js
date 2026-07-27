@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/client';
+import { decodeTokenExpiryMs } from '../auth/session';
 import { colors, fonts, radius } from '../theme';
 
 // Field-relevant roles only — "client" is a web-viewer role with no reason
@@ -29,8 +30,10 @@ export default function RegisterScreen({ navigation }) {
     setLoading(true);
     try {
       const r = await api.post('/auth/register', { name: name.trim(), email: email.trim(), password, role });
+      const expMs = decodeTokenExpiryMs(r.data.token);
       await AsyncStorage.multiSet([
         ['sv_token', r.data.token],
+        ['sv_token_exp', expMs ? String(expMs) : ''],
         ['sv_role', r.data.user.role],
         ['sv_name', r.data.user.name || ''],
         ['sv_email', r.data.user.email || ''],

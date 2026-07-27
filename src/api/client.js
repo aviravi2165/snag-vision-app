@@ -1,5 +1,6 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearSession } from '../auth/session';
 
 // Point this at your PC's LAN IP when testing on a real device via Expo Go —
 // phone and PC must be on the same WiFi. 10.0.2.2 only resolves inside the
@@ -21,6 +22,24 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// A 401 means the token is gone/expired server-side — clear the stale
+// identity locally (never the photos/spots tables) and tag the error so
+// callers like syncEngine can abort cleanly instead of treating it as a
+// per-request failure to retry.
+function attachAuthInterceptor(instance) {
+  instance.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+      if (error.response?.status === 401) {
+        await clearSession();
+        error.isAuthExpired = true;
+      }
+      return Promise.reject(error);
+    }
+  );
+}
+attachAuthInterceptor(api);
+
 // The room/spot create+delete endpoints live on the web-facing router (no
 // /mobile prefix, reused as-is from the web admin tooling) — this instance
 // targets the bare host so those paths resolve correctly. Same auth header
@@ -31,5 +50,6 @@ webApi.interceptors.request.use(async (config) => {
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+attachAuthInterceptor(webApi);
 
 export default api;

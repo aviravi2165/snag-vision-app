@@ -8,11 +8,13 @@ import ProjectsScreen from './src/screens/ProjectsScreen';
 import CaptureScreen from './src/screens/CaptureScreen';
 import ManageSpotsScreen from './src/screens/ManageSpotsScreen';
 import AccountDetailsScreen from './src/screens/AccountDetailsScreen';
-import { watchConnectivityAndAutoSync } from './src/sync/syncEngine';
+import { watchConnectivityAndAutoSync, onSyncProgress } from './src/sync/syncEngine';
 import { initDb } from './src/db/localStore';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isExpiredAt, clearSession } from './src/auth/session';
+import { navigationRef, resetToLogin } from './src/navigation/navigationRef';
 import DashboardScreen from './src/screens/DashboardScreen';
 import AppDrawerContent from './src/components/AppDrawerContent';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
@@ -78,13 +80,37 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem('sv_token').then((token) => setInitialRoute(token ? 'Main' : 'Login'));
+    AsyncStorage.multiGet(['sv_token', 'sv_token_exp']).then((pairs) => {
+      const map = Object.fromEntries(pairs);
+      const valid = map.sv_token && !isExpiredAt(map.sv_token_exp ? Number(map.sv_token_exp) : null);
+      setInitialRoute(valid ? 'Main' : 'Login');
+    });
   }, []);
 
   useEffect(() => {
     const unsub = watchConnectivityAndAutoSync();
     return unsub;
   }, []);
+
+  // Catches the case a network call would never surface: phone sits
+  // overnight with the token expiring while fully offline, then reopens the
+  // app next morning — nothing else would notice until some request 401s.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (state) => {
+      if (state !== 'active') return;
+      const pairs = await AsyncStorage.multiGet(['sv_token', 'sv_token_exp']);
+      const map = Object.fromEntries(pairs);
+      if (map.sv_token && isExpiredAt(map.sv_token_exp ? Number(map.sv_token_exp) : null)) {
+        await clearSession();
+        resetToLogin();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // The one place mid-sync auth failures surface — syncEngine only ever
+  // notifies, it never imports navigation itself.
+  useEffect(() => onSyncProgress((e) => { if (e.type === 'auth-expired') resetToLogin(); }), []);
 
   if (!dbReady || !initialRoute || !fontsLoaded) {
     return (
@@ -96,7 +122,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <NavigationContainer theme={theme}>
+      <NavigationContainer ref={navigationRef} theme={theme}>
         <Stack.Navigator
           initialRouteName={initialRoute}
           screenOptions={{ headerStyle: { backgroundColor: colors.surface }, headerTitleStyle: { fontFamily: fonts.heading }, headerTintColor: colors.text }}

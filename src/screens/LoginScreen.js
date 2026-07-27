@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/client';
+import { decodeTokenExpiryMs } from '../auth/session';
 import { colors, fonts, radius } from '../theme';
 
 export default function LoginScreen({ navigation }) {
@@ -15,8 +16,10 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       const r = await api.post('/auth/login', { email, password });
+      const expMs = decodeTokenExpiryMs(r.data.token);
       await AsyncStorage.multiSet([
         ['sv_token', r.data.token],
+        ['sv_token_exp', expMs ? String(expMs) : ''],
         ['sv_role', r.data.user.role],
         ['sv_name', r.data.user.name || ''],
         ['sv_email', r.data.user.email || ''],
