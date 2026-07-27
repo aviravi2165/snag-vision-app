@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/client';
@@ -20,6 +20,7 @@ export default function ProjectsScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [prepareStatus, setPrepareStatus] = useState('');
+  const [query, setQuery] = useState('');
 
   const resort = useCallback(async () => {
     const lastMap = await getLastActivityByProject();
@@ -91,6 +92,18 @@ export default function ProjectsScreen({ navigation }) {
     navigation.navigate('ManageSpots', { projectId: p.ProjectId, projectName: p.Name });
   };
 
+  // Client-side filter only — the list is already fully loaded (cached or
+  // fresh), and even 30+ projects is trivial to filter on every keystroke,
+  // so no debounce/server round-trip is worth the complexity here.
+  const trimmedQuery = query.trim().toLowerCase();
+  const filteredProjects = trimmedQuery
+    ? projects.filter((p) => (
+        (p.Name || '').toLowerCase().includes(trimmedQuery)
+        || (p.Folder || '').toLowerCase().includes(trimmedQuery)
+        || (p.City || '').toLowerCase().includes(trimmedQuery)
+      ))
+    : projects;
+
   return (
     <>
       <SyncStatusBar />
@@ -108,11 +121,38 @@ export default function ProjectsScreen({ navigation }) {
         </View>
         {serverCount !== null && <Text style={styles.serverCount}>{serverCount} project(s) on server</Text>}
         {!!prepareStatus && <Text style={styles.serverCount}>{prepareStatus}</Text>}
+
+        {projects.length > 0 && (
+          <View style={styles.searchWrap}>
+            <TextInput
+              style={styles.searchInput}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search projects by name, folder, or city"
+              placeholderTextColor={colors.placeholder}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {query.length > 0 && (
+              <TouchableOpacity style={styles.searchClear} onPress={() => setQuery('')}>
+                <Text style={styles.searchClearT}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         <FlatList
-          data={projects}
+          data={filteredProjects}
           keyExtractor={(p) => p.ProjectId}
           renderItem={({ item }) => <ProjectRow project={item} onOpen={open} onManage={openManage} />}
-          ListEmptyComponent={<Text style={styles.meta}>No projects yet — connect to the internet to load them.</Text>}
+          ListEmptyComponent={
+            <Text style={styles.meta}>
+              {projects.length === 0
+                ? 'No projects yet — connect to the internet to load them.'
+                : `No projects match "${query.trim()}"`}
+            </Text>
+          }
         />
       </View>
     </>
@@ -192,6 +232,10 @@ const styles = StyleSheet.create({
   prepareBtn: { borderColor: colors.border, backgroundColor: colors.surface },
   refreshBtnT: { color: colors.accent, fontSize: 12, fontWeight: '600', fontFamily: fonts.bodySemiBold },
   serverCount: { color: colors.textMuted, fontSize: 12, marginTop: 6, marginBottom: 4, fontFamily: fonts.body },
+  searchWrap: { position: 'relative', justifyContent: 'center', marginTop: 10 },
+  searchInput: { backgroundColor: colors.surface, color: colors.text, borderRadius: radius.button, paddingVertical: 10, paddingHorizontal: 14, paddingRight: 36, borderWidth: 1, borderColor: colors.border, fontFamily: fonts.body, fontSize: 14 },
+  searchClear: { position: 'absolute', right: 8, top: 0, bottom: 0, justifyContent: 'center', paddingHorizontal: 6 },
+  searchClearT: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
   card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginTop: 12, marginBottom: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   name: { color: colors.text, fontSize: 16, fontWeight: '700', fontFamily: fonts.heading },
   meta: { color: colors.textMuted, marginTop: 4, fontFamily: fonts.body },

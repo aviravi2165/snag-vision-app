@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Modal, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Modal, FlatList, Image } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import uuid from 'react-native-uuid';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -28,6 +28,12 @@ export default function CaptureScreen({ route, navigation }) {
   const [spotCount, setSpotCount] = useState(0);
   const [spotCounts, setSpotCounts] = useState({});
   const [status, setStatus] = useState('Not connected to camera');
+  const [currentPhotoUri, setCurrentPhotoUri] = useState(null);
+  // A capture lands here first — nothing is written to the permanent photo
+  // store or the DB until the worker taps "Use Photo" in the preview modal.
+  const [previewUri, setPreviewUri] = useState(null);
+  const [previewMeta, setPreviewMeta] = useState(null); // { photoId, spot }
+  const [confirming, setConfirming] = useState(false);
 
   const refreshSpotCounts = async () => setSpotCounts(await getPhotoCountsBySpot());
   useEffect(() => { refreshSpotCounts(); }, []);
@@ -45,6 +51,7 @@ export default function CaptureScreen({ route, navigation }) {
     setFloorIdx(0);
     setCurrentSpot(null);
     setSpotCount(0);
+    setCurrentPhotoUri(null);
   }, [route?.params?.projectId]);
 
   const captureWithPhoneCamera = async () => {
@@ -55,16 +62,29 @@ export default function CaptureScreen({ route, navigation }) {
     const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
     if (result.canceled) return;
 
-    setCapturing(true);
+    // Hand off to the preview modal instead of saving immediately — the
+    // picker's own temp file is enough to review, nothing is committed to
+    // the permanent photo store or the DB until "Use Photo" is tapped.
+    setPreviewMeta({ photoId: uuid.v4(), spot: currentSpot });
+    setPreviewUri(result.assets[0].uri);
+    setStatus('Review your photo');
+  };
+
+  // Runs after the worker taps "Use Photo" in the preview modal — this is
+  // the only place capturePhoto/captureWithPhoneCamera used to save to
+  // directly. Splitting it out lets both capture paths share one confirm step.
+  const confirmPreview = async () => {
+    if (!previewUri || !previewMeta) return;
+    setConfirming(true);
     setStatus('Saving photo…');
     try {
-      const photoId = uuid.v4();
-      const { localUri, checksum } = await savePhotoLocally(result.assets[0].uri, photoId);
+      const { photoId, spot } = previewMeta;
+      const { localUri, checksum } = await savePhotoLocally(previewUri, photoId);
       await insertPhoto({
         id: photoId,
         projectId,
-        roomId: currentSpot.RoomId,
-        spotId: currentSpot.SpotId,
+        roomId: spot.RoomId,
+        spotId: spot.SpotId,
         localUri,
         checksum,
       });
@@ -72,13 +92,28 @@ export default function CaptureScreen({ route, navigation }) {
       // (see localStore.insertPhoto), so the count is always exactly 1 now
       // -- not the previous count plus one.
       setSpotCount(1);
+      setCurrentPhotoUri(localUri);
       await refreshSpotCounts();
-      setStatus('Saved to local queue');
+      setStatus('Saved to device — will upload when you sync');
     } catch (e) {
       setStatus(`Save failed: ${e.message}`);
       Alert.alert('Save failed', e.message);
     }
-    setCapturing(false);
+    setConfirming(false);
+    setPreviewUri(null);
+    setPreviewMeta(null);
+  };
+
+  // Discards the not-yet-saved temp file and returns to the capture state —
+  // whatever photo was already saved for this spot before is untouched,
+  // since insertPhoto was never called for the rejected shot.
+  const retakePreview = async () => {
+    if (previewUri) {
+      try { await FileSystem.deleteAsync(previewUri, { idempotent: true }); } catch { /* temp file, safe to ignore */ }
+    }
+    setPreviewUri(null);
+    setPreviewMeta(null);
+    setStatus(connected ? 'Connected' : 'Not connected to camera');
   };
 
   // When opened directly from the drawer there are no route params — fall back
@@ -149,6 +184,11 @@ export default function CaptureScreen({ route, navigation }) {
     setCurrentSpot(s);
     const rows = await getPhotosForSpot(s.SpotId);
     setSpotCount(rows.length);
+    // getPhotosForSpot orders oldest-first; a capture always replaces any
+    // prior photo for a spot going forward, but older data captured before
+    // that behavior shipped could still have more than one row — take the
+    // most recent so the thumbnail never shows a stale photo.
+    setCurrentPhotoUri(rows[rows.length - 1]?.localUri || null);
   };
 
   const capturePhoto = async () => {
@@ -161,23 +201,11 @@ export default function CaptureScreen({ route, navigation }) {
       const tempDest = `${photoId}.jpg`;
       setStatus('Transferring photo…');
       const localTempUri = await osc.downloadToLocal(fileUrl, `${FileSystem.cacheDirectory}${tempDest}`);
-      const { localUri, checksum } = await savePhotoLocally(localTempUri, photoId);
 
-      await insertPhoto({
-        id: photoId,
-        projectId,
-        roomId: currentSpot.RoomId,
-        spotId: currentSpot.SpotId,
-        localUri,
-        checksum,
-      });
-
-      // A capture always replaces whatever was there before for this spot
-      // (see localStore.insertPhoto), so the count is always exactly 1 now
-      // -- not the previous count plus one.
-      setSpotCount(1);
-      await refreshSpotCounts();
-      setStatus('Saved to device — will upload when you sync');
+      // Hand off to the preview modal instead of saving immediately.
+      setPreviewMeta({ photoId, spot: currentSpot });
+      setPreviewUri(localTempUri);
+      setStatus('Review your photo');
     } catch (e) {
       setStatus(`Capture failed: ${e.message}`);
       Alert.alert('Capture failed', e.message);
@@ -227,11 +255,31 @@ export default function CaptureScreen({ route, navigation }) {
           counts={spotCounts}
           onSelectSpot={selectSpot}
         />
-        <Text style={styles.current}>
-          Current spot: <Text style={{ color: colors.success }}>{currentSpot?.SpotName || 'none selected'}</Text>
-          {currentSpot ? `  ·  ${spotCount} photo(s) saved` : ''}
-        </Text>
+        <View style={styles.currentRow}>
+          {currentPhotoUri ? <Image source={{ uri: currentPhotoUri }} style={styles.thumb} /> : null}
+          <Text style={styles.current}>
+            Current spot: <Text style={{ color: colors.success }}>{currentSpot?.SpotName || 'none selected'}</Text>
+            {currentSpot ? `  ·  ${spotCount} photo(s) saved` : ''}
+          </Text>
+        </View>
       </View>
+
+      <Modal visible={!!previewUri} transparent animationType="fade" onRequestClose={retakePreview}>
+        <View style={styles.previewOverlay}>
+          <View style={styles.previewCard}>
+            <Text style={styles.previewTitle}>Review photo — {previewMeta?.spot?.SpotName}</Text>
+            {previewUri ? <Image source={{ uri: previewUri }} style={styles.previewImage} resizeMode="cover" /> : null}
+            <View style={styles.previewBtns}>
+              <TouchableOpacity style={[styles.btn, styles.btnSecondary, styles.previewBtn]} onPress={retakePreview} disabled={confirming}>
+                <Text style={styles.btnText}>Retake</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.previewBtn]} onPress={confirmPreview} disabled={confirming}>
+                {confirming ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Use Photo</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <View style={styles.card}>
         <Text style={styles.row}>Status: <Text style={{ color: colors.accent }}>{status}</Text></Text>
@@ -283,7 +331,15 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   planHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   planTitle: { color: colors.text, fontWeight: '700', fontFamily: fonts.heading },
-  current: { color: colors.textMuted, marginTop: 10, fontFamily: fonts.body },
+  currentRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 },
+  thumb: { width: 44, height: 44, borderRadius: radius.button, backgroundColor: colors.surfaceHover },
+  current: { color: colors.textMuted, flex: 1, fontFamily: fonts.body },
+  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.65)', justifyContent: 'center', padding: 24 },
+  previewCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16 },
+  previewTitle: { color: colors.text, fontWeight: '700', fontFamily: fonts.heading, marginBottom: 10 },
+  previewImage: { width: '100%', aspectRatio: 1, borderRadius: radius.button, backgroundColor: colors.surfaceHover },
+  previewBtns: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  previewBtn: { flex: 1, marginBottom: 0 },
   row: { color: colors.textBody, marginBottom: 6, fontFamily: fonts.body },
   btn: { backgroundColor: colors.accent, padding: 16, borderRadius: radius.button, marginBottom: 12 },
   btnConnected: { backgroundColor: colors.success },

@@ -4,6 +4,7 @@ import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawe
 import { CommonActions } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { clearSession } from '../auth/session';
 import { colors, fonts, radius } from '../theme';
 
 export default function AppDrawerContent(props) {
@@ -16,7 +17,8 @@ export default function AppDrawerContent(props) {
         text: 'Sign out',
         style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.multiRemove(['sv_token', 'sv_project', 'sv_role', 'sv_name', 'sv_email']);
+          await clearSession();
+          await AsyncStorage.removeItem('sv_project');
           // Reset the ROOT stack (Login/Main), not just the drawer, so the
           // back button can never return to an authenticated screen.
           props.navigation.getParent()?.dispatch(

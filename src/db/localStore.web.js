@@ -43,6 +43,10 @@ export async function markFailed(id, errorMsg) {
   const p = await get(KEY_PREFIX + id);
   await set(KEY_PREFIX + id, { ...p, status: 'failed', attempts: (p.attempts || 0) + 1, lastError: errorMsg });
 }
+export async function resetPhotoToPending(id) {
+  const p = await get(KEY_PREFIX + id);
+  await set(KEY_PREFIX + id, { ...p, status: 'pending' });
+}
 
 export async function getUploadSummary() {
   const all = await allPhotos();
@@ -56,6 +60,29 @@ export async function getPhotoCountsBySpot() {
   all.forEach((p) => { map[p.spotId] = (map[p.spotId] || 0) + 1; });
   return map;
 } 
+
+// Web parity — localUri here is itself a data: URL (see fileStore.web.js),
+// so its string length is a close-enough estimate of the encoded byte size.
+export async function getStorageStats() {
+  const all = await allPhotos();
+  let totalBytes = 0, doneBytes = 0, doneCount = 0;
+  all.forEach((p) => {
+    const size = p.localUri ? p.localUri.length : 0;
+    totalBytes += size;
+    if (p.status === 'done') { doneBytes += size; doneCount += 1; }
+  });
+  return { totalCount: all.length, totalBytes, doneCount, doneBytes };
+}
+
+export async function clearSyncedPhotoFiles() {
+  const all = await allPhotos();
+  const done = all.filter((p) => p.status === 'done');
+  await Promise.all(done.map(async (p) => {
+    await deletePhotoLocally(p.localUri);
+    await del(KEY_PREFIX + p.id);
+  }));
+  return done.length;
+}
 
 export async function getPhotosForProject(projectId) {
   const all = (await allPhotos()).filter((p) => p.projectId === projectId);
@@ -137,6 +164,10 @@ export async function getPendingDeleteSpots(projectId) {
 export async function markSpotSyncing(id) {
   const s = await get(SPOT_PREFIX + id);
   await set(SPOT_PREFIX + id, { ...s, syncStatus: 'syncing' });
+}
+export async function markSpotQueued(id) {
+  const s = await get(SPOT_PREFIX + id);
+  await set(SPOT_PREFIX + id, { ...s, syncStatus: 'pending' });
 }
 export async function markSpotSynced(id, remoteId) {
   const s = await get(SPOT_PREFIX + id);
