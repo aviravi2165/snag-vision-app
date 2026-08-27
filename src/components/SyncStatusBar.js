@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { onSyncProgress, getQueueSummary, getFailedPhotosInfo, runSync } from '../sync/syncEngine';
-import { colors, fonts, radius } from '../theme';
+import { colors, fonts, radius, shadow } from '../theme';
 
 // The global "sync everything" button used to live here. Now that every
 // project has its own scoped Sync button (uploads only that project's
@@ -37,6 +37,9 @@ export default function SyncStatusBar() {
                 const pct = Math.round((e.photoPct || 0) * 100);
                 setMessage(`Uploading ${e.done + e.failed + 1}/${e.total} — ${pct}%`);
                 setPhotoPct(e.photoPct ?? 0);
+            }
+            if (e.type === 'walkthrough-started') {
+                setMessage(e.number ? `Started Walkthrough ${e.number}` : 'Started a new walkthrough');
             }
             if (e.type === 'offline') { setMessage('No network — connect to WiFi to sync'); setPhotoPct(null); }
             if (e.type === 'offline-mid-sync') { setMessage('Lost connection — will resume automatically'); setPhotoPct(null); }
@@ -76,7 +79,7 @@ export default function SyncStatusBar() {
 }
 
 const styles = StyleSheet.create({
-    bar: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+    bar: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 16, ...shadow.card },
     text: { color: colors.text, fontWeight: '700', fontFamily: fonts.heading },
     sub: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontFamily: fonts.body },
     track: { height: 5, backgroundColor: colors.border, borderRadius: 3, marginTop: 8, overflow: 'hidden' },

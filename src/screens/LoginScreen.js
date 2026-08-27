@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/client';
 import { decodeTokenExpiryMs } from '../auth/session';
-import { colors, fonts, radius } from '../theme';
+import { colors, fonts, radius, shadow } from '../theme';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('yashq@gmail.com');
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
   brandWrap: { marginBottom: 32, alignItems: 'center' },
   brand: { color: colors.text, fontSize: 34, fontWeight: '800', fontFamily: fonts.headingBold, letterSpacing: -0.5 },
   sub: { color: colors.textMuted, marginTop: 4, fontFamily: fonts.body },
-  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 20, ...shadow.card },
   label: { color: colors.textMuted, fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 4, fontFamily: fonts.bodySemiBold },
   input: { backgroundColor: colors.surfaceHover, color: colors.text, borderRadius: radius.button, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: colors.border, fontFamily: fonts.body },
   err: { color: colors.danger, marginBottom: 8, fontSize: 13, fontFamily: fonts.bodyMedium },

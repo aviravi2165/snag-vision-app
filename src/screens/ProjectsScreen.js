@@ -8,7 +8,7 @@ import { cacheGet, cacheSet } from '../data/cache';
 import { ensureLocalPlanImage } from '../data/planCache';
 import { getProjectSyncSummary, getLastActivityByProject, getPhotoCountsBySpot, getMergedStructureForProject } from '../db/localStore';
 import { runSync, onSyncProgress } from '../sync/syncEngine';
-import { colors, fonts, radius } from '../theme';
+import { colors, fonts, radius, shadow } from '../theme';
 
 function sortByActivity(list, lastMap) {
   return [...list].sort((a, b) => (lastMap[b.ProjectId] || 0) - (lastMap[a.ProjectId] || 0));
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   searchInput: { backgroundColor: colors.surface, color: colors.text, borderRadius: radius.button, paddingVertical: 10, paddingHorizontal: 14, paddingRight: 36, borderWidth: 1, borderColor: colors.border, fontFamily: fonts.body, fontSize: 14 },
   searchClear: { position: 'absolute', right: 8, top: 0, bottom: 0, justifyContent: 'center', paddingHorizontal: 6 },
   searchClearT: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
-  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginTop: 12, marginBottom: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginTop: 12, marginBottom: 2, ...shadow.card },
   name: { color: colors.text, fontSize: 16, fontWeight: '700', fontFamily: fonts.heading },
   meta: { color: colors.textMuted, marginTop: 4, fontFamily: fonts.body },
   rowBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, flexWrap: 'wrap', gap: 8 },

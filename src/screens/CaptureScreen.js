@@ -13,7 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { cacheGet, cacheSet } from '../data/cache';
 import { ensureLocalPlanImage } from '../data/planCache';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors, fonts, radius } from '../theme';
+import { colors, fonts, radius, shadow } from '../theme';
 
 export default function CaptureScreen({ route, navigation }) {
   const [projectId, setProjectId] = useState(route?.params?.projectId ?? null);
@@ -23,6 +23,7 @@ export default function CaptureScreen({ route, navigation }) {
   const [floorPickerOpen, setFloorPickerOpen] = useState(false);
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [cameraHostLabel, setCameraHostLabel] = useState(null);
   const [capturing, setCapturing] = useState(false);
   const [currentSpot, setCurrentSpot] = useState(null);
   const [spotCount, setSpotCount] = useState(0);
@@ -165,17 +166,39 @@ export default function CaptureScreen({ route, navigation }) {
 
   useFocusEffect(useCallback(() => { refreshMergedFloor(); }, [refreshMergedFloor]));
 
+  // Clears the remembered address (including any simulator left pinned from
+  // desk testing) so the next connect re-discovers from scratch.
+  const resetCameraConnection = async () => {
+    await osc.forgetCameraHost();
+    setConnected(false);
+    setCameraHostLabel(null);
+    setStatus('Camera connection reset — tap Connect Camera');
+  };
+
   const connectCamera = async () => {
     setConnecting(true);
     try {
-      await osc.pingCamera();
+      const info = await osc.pingCamera();
       await osc.prepareImageMode();
       setConnected(true);
-      setStatus('Connected');
+      setCameraHostLabel(osc.getResolvedHost());
+      setStatus(`Connected to ${info?.model || 'camera'} at ${osc.getResolvedHost()}`);
     } catch (e) {
       setConnected(false);
-      setStatus('Could not reach camera — check you joined its WiFi');
-      Alert.alert('Camera not found', 'Make sure your phone is connected to the camera\'s WiFi network, then try again.');
+      // Show what each address actually returned. A generic "not found" hides
+      // whether this was a timeout, a refused connection, or a reply that
+      // didn't look like a camera — and those need different fixes.
+      const detail = e.attempts?.length
+        ? `\n\nTried:\n${e.attempts.join('\n')}`
+        : `\n\n${e.message}`;
+      // Put the detail in the on-screen status too, not just a dismissable
+      // alert — an alert that's tapped away takes the only diagnostic with it.
+      setStatus(`[v2] Could not reach camera.${detail}`);
+      setCameraHostLabel(await osc.getCameraHost());
+      Alert.alert(
+        'Camera not found',
+        `Make sure your phone is on the camera's WiFi network and mobile data is off, then try again.${detail}`
+      );
     }
     setConnecting(false);
   };
@@ -283,6 +306,16 @@ export default function CaptureScreen({ route, navigation }) {
 
       <View style={styles.card}>
         <Text style={styles.row}>Status: <Text style={{ color: colors.accent }}>{status}</Text></Text>
+        {cameraHostLabel ? (
+          <Text style={[styles.row, { color: colors.textMuted, fontSize: 12 }]}>
+            Camera address: {cameraHostLabel}
+          </Text>
+        ) : null}
+        <TouchableOpacity onPress={resetCameraConnection}>
+          <Text style={{ color: colors.accent, fontSize: 12, marginTop: 8, fontFamily: fonts.bodySemiBold }}>
+            Reset camera connection
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {!connected ? (
@@ -320,7 +353,7 @@ export default function CaptureScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   c: { flex: 1, backgroundColor: colors.bg, padding: 16 },
   h: { color: colors.text, fontSize: 22, fontWeight: '700', marginBottom: 12, fontFamily: fonts.headingBold, letterSpacing: -0.4 },
-  floorSelect: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  floorSelect: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 16, ...shadow.card },
   floorSelectLabel: { color: colors.textMuted, fontSize: 12, fontFamily: fonts.body },
   floorSelectValue: { color: colors.text, fontWeight: '700', fontFamily: fonts.bodySemiBold },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.5)', justifyContent: 'center', padding: 24 },
@@ -328,7 +361,7 @@ const styles = StyleSheet.create({
   modalRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
   modalRowActive: { backgroundColor: colors.accentLight },
   modalRowT: { color: colors.text, fontWeight: '600', fontFamily: fonts.bodySemiBold },
-  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 16, ...shadow.card },
   planHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   planTitle: { color: colors.text, fontWeight: '700', fontFamily: fonts.heading },
   currentRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 },

@@ -1,11 +1,32 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { clearSession } from '../auth/session';
 
-// Point this at your PC's LAN IP when testing on a real device via Expo Go —
-// phone and PC must be on the same WiFi. 10.0.2.2 only resolves inside the
-// Android emulator's loopback, never on a physical phone.
-export const API_BASE_HOST = 'http://192.168.100.7:8000';
+const API_PORT = 8000;
+
+// Fallback only — used for standalone/production builds, where Expo reports no
+// dev host. Keep it pointed at wherever the deployed API lives.
+const FALLBACK_HOST = `http://192.168.100.83:${API_PORT}`;
+
+// During development Metro runs on the SAME machine as the backend, and Expo
+// hands us that machine's current LAN IP. Deriving the API host from it means
+// a DHCP lease change no longer breaks the app — this address changed three
+// times in a single day of testing, each time looking like a server outage
+// ("could not reach server") when nothing was actually wrong.
+//
+// hostUri looks like "192.168.1.5:8081"; the older debuggerHost key is checked
+// too since which one is populated varies by SDK and launch mode.
+function inferDevHost() {
+    const hostUri =
+        Constants.expoConfig?.hostUri ||
+        Constants.expoGoConfig?.debuggerHost ||
+        Constants.manifest2?.extra?.expoClient?.hostUri;
+    const host = hostUri?.split('/')[0]?.split(':')[0];
+    return host ? `http://${host}:${API_PORT}` : null;
+}
+
+export const API_BASE_HOST = inferDevHost() || FALLBACK_HOST;
 // The backend routers are mounted bare (no /api prefix) — /mobile/* is the
 // namespace built specifically for this app; the web app's own endpoints
 // live at other paths on this same server and are untouched by this app.

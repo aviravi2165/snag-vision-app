@@ -1,4 +1,4 @@
-# SnagVision — Mobile Capture App
+# VESTIGIA — Mobile Capture App
 
 Offline-first React Native (Expo) app for capturing 360° construction site photos mapped to floor-plan locations, for IEVO.
 
