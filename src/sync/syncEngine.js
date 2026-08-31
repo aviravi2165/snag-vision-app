@@ -6,7 +6,7 @@ import {
     getPendingSyncSpots, getPendingDeleteSpots, markSpotSyncing, markSpotQueued, markSpotSynced,
     markSpotSyncFailed, markSpotDeleteFailed, removeLocalSpot, reassignPhotosSpotId, pruneSyncedSpots,
 } from '../db/localStore';
-import api, { API_BASE } from '../api/client';
+import api, { webApi, API_BASE } from '../api/client';
 import { cacheSet } from '../data/cache';
 import { clearSession } from '../auth/session';
 
@@ -52,8 +52,17 @@ async function uploadOne(photo, onProgress) {
     );
     const result = await task.uploadAsync();
     if (!result || result.status < 200 || result.status >= 300) {
-        const err = new Error(`Upload failed (${result?.status ?? 'no response'})`);
+        // The server explains *why* it rejected the upload in the body (FastAPI
+        // puts it in `detail`). Discarding that turned a self-explanatory
+        // "Start a walkthrough first" into a bare "Upload failed (400)" that
+        // took a database investigation to diagnose — so surface it.
+        let detail = '';
+        try {
+            detail = JSON.parse(result?.body || '{}').detail || '';
+        } catch { detail = (result?.body || '').slice(0, 200); }
+        const err = new Error(detail || `Upload failed (${result?.status ?? 'no response'})`);
         err.status = result?.status;
+        err.detail = detail;
         // This goes through a raw upload task, not axios, so client.js's
         // response interceptor never sees it — do the same session cleanup
         // here so an expired token behaves identically everywhere.
@@ -88,6 +97,47 @@ async function uploadWithRetry(photo, onProgress) {
             if (!isRetryable(e) || attempt >= MAX_ATTEMPTS_PER_SYNC - 1) throw e;
             await delay(RETRY_DELAY_MS[attempt] || 1600);
         }
+    }
+}
+
+// Every capture origin (web Site Capture, the web Upload page and this app)
+// must stamp its uploads with the project's active walkthrough; the backend
+// hard-400s the upload when none exists and never auto-creates one. The app
+// has no walkthrough UI of its own, so a field user would otherwise be dead in
+// the water until someone opened the web app — instead, start one on their
+// behalf the first time a project needs it in this sync pass.
+//
+// Checked per project, not per photo: a cross-project queue drain would
+// otherwise issue the same lookup once per photo.
+const walkthroughReady = new Set();
+
+async function ensureWalkthrough(projectId) {
+    if (!projectId || walkthroughReady.has(projectId)) return { ok: true };
+
+    try {
+        await webApi.get(`/projects/${projectId}/walkthroughs/current`);
+        walkthroughReady.add(projectId);
+        return { ok: true };
+    } catch (e) {
+        if (e.isAuthExpired) return { authExpired: true };
+        // Anything other than "none active" isn't ours to interpret — let the
+        // upload itself run and report whatever the server actually says.
+        if (e.response?.status !== 404) return { ok: true };
+    }
+
+    try {
+        const r = await webApi.post(`/projects/${projectId}/walkthroughs`);
+        walkthroughReady.add(projectId);
+        return { ok: true, started: true, number: r.data?.number };
+    } catch (e) {
+        if (e.isAuthExpired) return { authExpired: true };
+        // 400 here means someone else started one between our check and this
+        // call — which is exactly the state we wanted, so treat it as success.
+        if (e.response?.status === 400) {
+            walkthroughReady.add(projectId);
+            return { ok: true };
+        }
+        return { ok: false, error: e.response?.data?.detail || e.message };
     }
 }
 
@@ -193,6 +243,10 @@ export async function runSync(projectId) {
     if (!net.isConnected) { notify({ type: 'offline', projectId }); return { offline: true }; }
 
     isSyncing = true;
+    // Re-checked every pass: a walkthrough that was active last time may have
+    // been completed on the web since, and completing one locks it against
+    // further captures.
+    walkthroughReady.clear();
     // Guaranteed reset on the way out, even if something throws mid-loop —
     // without this, one bad photo/network hiccup could leave isSyncing stuck
     // `true` forever, silently no-op'ing every future sync tap.
@@ -240,6 +294,18 @@ export async function runSync(projectId) {
         // nothing to upload against yet — skip it, don't fail it, it'll be
         // picked up automatically once its spot syncs on a later run.
         const toUpload = pending.filter((p) => !unsyncedSpotIds.has(p.spotId));
+
+        // Do this once up front rather than lazily inside the loop, so the
+        // "starting a walkthrough" step can't be mistaken for a stalled upload.
+        for (const pid of new Set(toUpload.map((p) => p.projectId).filter(Boolean))) {
+            const wt = await ensureWalkthrough(pid);
+            if (wt.authExpired) {
+                notify({ type: 'auth-expired', projectId });
+                return { authExpired: true, spots: spotsResult, photos: { total: toUpload.length, done: 0, failed: 0 }, items };
+            }
+            if (wt.started) notify({ type: 'walkthrough-started', projectId: pid, number: wt.number });
+        }
+
         notify({ type: 'start', total: toUpload.length, projectId });
 
         let done = 0, failed = 0;

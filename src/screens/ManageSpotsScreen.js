@@ -7,7 +7,7 @@ import api, { webApi } from '../api/client';
 import PlanPicker from '../components/PlanPicker';
 import { cacheGet, cacheSet } from '../data/cache';
 import { insertLocalSpot, queueSpotDelete, getMergedSpotsForFloor } from '../db/localStore';
-import { colors, fonts, radius } from '../theme';
+import { colors, fonts, radius, shadow } from '../theme';
 
 // Drawer-visible, offline-first spot manager: a worker at a site with no
 // WiFi can add/remove spots here and they show up immediately — the
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   h: { color: colors.text, fontSize: 22, fontWeight: '700', fontFamily: fonts.headingBold, letterSpacing: -0.4 },
   switchLink: { color: colors.accent, fontSize: 12, fontWeight: '600', fontFamily: fonts.bodySemiBold },
   sub: { color: colors.textMuted, fontSize: 12, marginTop: 2, marginBottom: 16, fontFamily: fonts.body },
-  floorSelect: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  floorSelect: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 16, ...shadow.card },
   floorSelectLabel: { color: colors.textMuted, fontSize: 12, fontFamily: fonts.body },
   floorSelectValue: { color: colors.text, fontWeight: '700', fontFamily: fonts.bodySemiBold },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.5)', justifyContent: 'center', padding: 24 },
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
   modalRowActive: { backgroundColor: colors.accentLight },
   modalRowT: { color: colors.text, fontWeight: '600', fontFamily: fonts.bodySemiBold },
   modalRowSub: { color: colors.textMuted, fontSize: 11, marginTop: 2, fontFamily: fonts.body },
-  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 16, ...shadow.card },
   cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15, fontFamily: fonts.heading },
   cardSub: { color: colors.textMuted, fontSize: 12, marginTop: 4, marginBottom: 12, fontFamily: fonts.body },
   roomSelect: { flexShrink: 1 },
@@ -429,5 +429,5 @@ const styles = StyleSheet.create({
   btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border },
   btnText: { color: '#fff', fontWeight: '700', fontFamily: fonts.bodySemiBold },
   btnGhostText: { color: colors.textBody, fontWeight: '700', fontFamily: fonts.bodySemiBold },
-  addCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 20, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
+  addCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 20, ...shadow.raised },
 });

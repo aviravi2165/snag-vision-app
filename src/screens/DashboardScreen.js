@@ -7,7 +7,7 @@ import { getPhotoCountsBySpot, getSyncSummaryByProject, getUploadSummary, getPho
 import * as osc from '../camera/oscClient';
 import { API_BASE_HOST } from '../api/client';
 import SyncStatusBar from '../components/SyncStatusBar';
-import { colors, fonts, radius } from '../theme';
+import { colors, fonts, radius, shadow } from '../theme';
 
 const NETWORK_CHECK_MS = 15000;
 const CAMERA_CHECK_MS = 15000;
@@ -257,10 +257,10 @@ const styles = StyleSheet.create({
     refreshBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.button, borderWidth: 1, borderColor: colors.accent },
     refreshBtnT: { color: colors.accent, fontSize: 12, fontWeight: '600', fontFamily: fonts.bodySemiBold },
     kpiRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-    kpi: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+    kpi: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, ...shadow.card },
     kpiLabel: { color: colors.textMuted, fontSize: 12, marginBottom: 4, fontFamily: fonts.body },
     kpiValue: { color: colors.text, fontSize: 16, fontWeight: '700', fontFamily: fonts.heading },
-    card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+    card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 12, ...shadow.card },
     cardLabel: { color: colors.textMuted, fontSize: 12, marginBottom: 6, fontFamily: fonts.body },
     netText: { fontSize: 14, fontWeight: '700', fontFamily: fonts.bodySemiBold },
     statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 },
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     pillDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
     pillT: { color: colors.textBody, fontSize: 12, fontFamily: fonts.body },
     sectionH: { color: colors.text, fontWeight: '700', marginBottom: 8, marginTop: 4, fontFamily: fonts.heading },
-    projectCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+    projectCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 10, ...shadow.card },
     projectName: { color: colors.text, fontSize: 15, fontWeight: '700', fontFamily: fonts.heading },
     projectMeta: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontFamily: fonts.body },
     barTrack: { height: 6, backgroundColor: colors.border, borderRadius: 3, marginTop: 8, overflow: 'hidden' },
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
     modalTitle: { color: colors.text, fontSize: 18, fontWeight: '700', fontFamily: fonts.heading },
     modalClose: { color: colors.accent, fontWeight: '700', fontFamily: fonts.bodySemiBold },
-    photoRow: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: radius.button, padding: 10, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+    photoRow: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: radius.button, padding: 10, marginBottom: 10, ...shadow.soft },
     thumb: { width: 56, height: 56, borderRadius: 6, marginRight: 10, backgroundColor: colors.border },
     photoStatus: { color: colors.textBody, fontSize: 12, marginBottom: 4, fontFamily: fonts.body },
     photoPath: { color: colors.textMuted, fontSize: 10, fontFamily: fonts.body },
